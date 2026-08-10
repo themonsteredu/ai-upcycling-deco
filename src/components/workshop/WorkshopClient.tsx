@@ -21,6 +21,7 @@ const Workshop = dynamic(
 
 export function WorkshopClient(props: {
   materials: Material[];
+  hooks: Material[];
   availableBases: BaseType[];
 }) {
   return <Workshop {...props} />;

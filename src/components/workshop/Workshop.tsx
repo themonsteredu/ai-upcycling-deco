@@ -53,6 +53,8 @@ type PendingTap =
 
 type Props = {
   materials: Material[];
+  /** 저장소 public/hooks 에 들어 있는 고리. 모든 학생에게 똑같이 보인다 */
+  hooks: Material[];
   availableBases: BaseType[];
 };
 
@@ -110,7 +112,28 @@ function prepareUpload(file: File, punchHoles = false) {
   );
 }
 
-export function Workshop({ materials, availableBases }: Props) {
+/**
+ * 저장소 폴더에서 온 사진도 넣을 때와 똑같이 배경을 지우고 잘라 준다.
+ * 선생님이 폴더에 그냥 넣어도 손질 없이 바로 쓸 수 있어야 한다.
+ */
+function trimFolderMaterial(material: Material, punchHoles: boolean) {
+  return new Promise<Material>((resolve) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => {
+      const result = autoTrimImage(image, punchHoles);
+      resolve(
+        result
+          ? { ...material, imageUrl: result.dataUrl, aspect: result.aspect }
+          : material,
+      );
+    };
+    image.onerror = () => resolve(material);
+    image.src = material.imageUrl;
+  });
+}
+
+export function Workshop({ materials, hooks, availableBases }: Props) {
   const [initialDraft] = useState(() => readDraft(availableBases));
   const [baseType, setBaseType] = useState<BaseType>(
     initialDraft?.baseType ?? availableBases[0] ?? "denim",
@@ -158,16 +181,47 @@ export function Workshop({ materials, availableBases }: Props) {
   } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 폴더 사진은 다듬은 뒤에 쓴다
+  const [folderMaterials, setFolderMaterials] = useState<Material[]>(materials);
+  const [folderHooks, setFolderHooks] = useState<Material[]>(hooks);
+
+  useEffect(() => {
+    let alive = true;
+    Promise.all(materials.map((m) => trimFolderMaterial(m, false))).then(
+      (list) => {
+        if (alive) setFolderMaterials(list);
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [materials]);
+
+  useEffect(() => {
+    let alive = true;
+    // 고리는 가운데 구멍까지 뚫는다
+    Promise.all(hooks.map((h) => trimFolderMaterial(h, true))).then((list) => {
+      if (alive) setFolderHooks(list);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [hooks]);
+
   const allMaterials = useMemo(
-    () => [...materials, ...addedMaterials],
-    [materials, addedMaterials],
+    () => [...folderMaterials, ...addedMaterials],
+    [folderMaterials, addedMaterials],
   );
   const materialById = useMemo(
     () => new Map(allMaterials.map((m) => [m.id, m])),
     [allMaterials],
   );
   const picked = pickedId ? materialById.get(pickedId) : undefined;
-  const hookMaterial = hookMaterials.find((m) => m.id === hookId) ?? null;
+  const allHooks = useMemo(
+    () => [...folderHooks, ...hookMaterials],
+    [folderHooks, hookMaterials],
+  );
+  const hookMaterial = allHooks.find((m) => m.id === hookId) ?? null;
   const selected = placements.find((p) => p.id === selectedId) ?? null;
   const usedKinds = new Set(placements.map((p) => p.materialId)).size;
 
@@ -724,7 +778,7 @@ export function Workshop({ materials, availableBases }: Props) {
             >
               없음
             </button>
-            {hookMaterials.map((material) => (
+            {allHooks.map((material) => (
               <div key={material.id} className="relative w-[4.5rem] shrink-0">
                 <button
                   type="button"
@@ -745,19 +799,21 @@ export function Workshop({ materials, availableBases }: Props) {
                     {material.name}
                   </span>
                 </button>
-                <button
-                  type="button"
-                  aria-label={`${material.name} 고리 빼기`}
-                  onClick={() => {
-                    setHookMaterials((prev) =>
-                      prev.filter((m) => m.id !== material.id),
-                    );
-                    if (hookId === material.id) setHookId(null);
-                  }}
-                  className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-black/70 text-[10px] text-rose-300"
-                >
-                  ×
-                </button>
+                {material.id.startsWith("hook-") && (
+                  <button
+                    type="button"
+                    aria-label={`${material.name} 고리 빼기`}
+                    onClick={() => {
+                      setHookMaterials((prev) =>
+                        prev.filter((m) => m.id !== material.id),
+                      );
+                      if (hookId === material.id) setHookId(null);
+                    }}
+                    className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-black/70 text-[10px] text-rose-300"
+                  >
+                    ×
+                  </button>
+                )}
               </div>
             ))}
           </div>

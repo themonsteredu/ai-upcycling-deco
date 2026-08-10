@@ -37,6 +37,17 @@ export default function WorkshopPage() {
       baseFiles.includes(`${type}-front.png`) && baseFiles.includes(`${type}-back.png`),
   );
 
+  // public/hooks 에 넣어 둔 고리는 모든 학생에게 똑같이 보인다
+  const hooks: Material[] = readImageDir("hooks")
+    .sort()
+    .map((file) => ({
+      id: `folder-hook-${file}`,
+      name: file.replace(IMAGE_PATTERN, "").replace(/[-_]/g, " "),
+      imageUrl: `/hooks/${file}`,
+      baseScale: 1,
+      category: "기타" as const,
+    }));
+
   const materials: Material[] = readImageDir("materials")
     .sort()
     .map((file) => ({
@@ -64,5 +75,11 @@ export default function WorkshopPage() {
     );
   }
 
-  return <WorkshopClient materials={materials} availableBases={availableBases} />;
+  return (
+    <WorkshopClient
+      materials={materials}
+      hooks={hooks}
+      availableBases={availableBases}
+    />
+  );
 }
