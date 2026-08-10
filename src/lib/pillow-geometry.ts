@@ -30,6 +30,8 @@ export type PillowShape = {
   geometry: THREE.BufferGeometry;
   /** 고리 끈 끝. 금속 링을 걸 자리다. 끈이 없으면 null */
   strapTip: { x: number; y: number; outward: 1 | -1 } | null;
+  /** 사진에 찍힌 것 전체가 차지하는 범위 (쿠션 몸통 가운데가 0) */
+  extent: { minX: number; maxX: number; minY: number; maxY: number };
 };
 
 /** 사진을 격자로 줄여서 알파(투명도)만 뽑아낸다 */
@@ -124,7 +126,6 @@ export async function createPillowFromImage(url: string): Promise<PillowShape> {
   const distance = distanceToEdge(alpha, width, height);
 
   const columns = new Int32Array(width);
-  const rows = new Int32Array(height);
   let minX = width;
   let maxX = -1;
   let deepest = 0;
@@ -133,24 +134,37 @@ export async function createPillowFromImage(url: string): Promise<PillowShape> {
       const index = y * width + x;
       if (alpha[index] <= ALPHA_CUT) continue;
       columns[x]++;
-      rows[y]++;
       if (x < minX) minX = x;
       if (x > maxX) maxX = x;
       if (distance[index] > deepest) deepest = distance[index];
     }
   }
 
+  // 가로: 성긴 줄(고리 끈)을 뺀 촘촘한 구간이 쿠션 몸통이다
   const bodyX = denseSpan(columns);
-  const bodyY = denseSpan(rows);
-  if (!bodyX || !bodyY || deepest === 0) {
+  if (!bodyX || deepest === 0) {
     throw new Error("사진에서 키링 모양을 찾지 못했습니다");
   }
 
+  // 세로: 몸통 구간 안에서 실루엣의 위아래 끝을 그대로 쓴다.
+  // 베개 모양이라 위아래 가장자리가 오목해서, 촘촘한 정도로 재면 짧게 나온다.
+  let minY = height;
+  let maxY = -1;
+  for (let y = 0; y < height; y++) {
+    for (let x = bodyX[0]; x <= bodyX[1]; x++) {
+      if (alpha[y * width + x] <= ALPHA_CUT) continue;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+      break;
+    }
+  }
+  if (maxY < 0) throw new Error("사진에서 키링 모양을 찾지 못했습니다");
+
   // 쿠션 몸통의 세로 길이가 2.1이 되도록 전체 크기를 맞춘다
-  const unit = CUSHION.height / (bodyY[1] - bodyY[0] + 1);
+  const unit = CUSHION.height / (maxY - minY + 1);
   const halfDepth = CUSHION.depth / 2;
   const centerX = (bodyX[0] + bodyX[1]) / 2;
-  const centerY = (bodyY[0] + bodyY[1]) / 2;
+  const centerY = (minY + maxY) / 2;
   const plateau = Math.max(1, deepest * PLATEAU);
 
   const positions: number[] = [];
@@ -241,5 +255,25 @@ export async function createPillowFromImage(url: string): Promise<PillowShape> {
     };
   }
 
-  return { geometry, strapTip };
+  let silhouetteTop = height;
+  let silhouetteBottom = -1;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (alpha[y * width + x] <= ALPHA_CUT) continue;
+      if (y < silhouetteTop) silhouetteTop = y;
+      if (y > silhouetteBottom) silhouetteBottom = y;
+      break;
+    }
+  }
+
+  return {
+    geometry,
+    strapTip,
+    extent: {
+      minX: (minX - centerX) * unit,
+      maxX: (maxX - centerX) * unit,
+      minY: (centerY - silhouetteBottom) * unit,
+      maxY: (centerY - silhouetteTop) * unit,
+    },
+  };
 }

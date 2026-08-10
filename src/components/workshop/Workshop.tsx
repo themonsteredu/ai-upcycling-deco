@@ -3,8 +3,9 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Canvas, type ThreeEvent } from "@react-three/fiber";
-import { Html, OrbitControls } from "@react-three/drei";
-import { KeyringBase } from "./KeyringBase";
+import { Html, OrbitControls, PerspectiveCamera } from "@react-three/drei";
+import type { PillowShape } from "@/lib/pillow-geometry";
+import { HARDWARE_REACH, KeyringBase } from "./KeyringBase";
 import { Sticker } from "./Sticker";
 import {
   BASE_LABEL,
@@ -87,6 +88,13 @@ export function Workshop({ materials, availableBases }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [trayMaterialId, setTrayMaterialId] = useState<string | null>(null);
   const [controlsEnabled, setControlsEnabled] = useState(true);
+  const [frame, setFrame] = useState<{
+    cx: number;
+    cy: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [viewport, setViewport] = useState({ width: 1280, height: 720 });
 
   const containerRef = useRef<HTMLDivElement>(null);
   const pointerStart = useRef<{ x: number; y: number } | null>(null);
@@ -120,6 +128,60 @@ export function Workshop({ materials, availableBases }: Props) {
       // 저장 공간이 없어도 작업은 계속되어야 한다
     }
   }, [baseType, placements]);
+
+  /* ---------- 화면에 꽉 차게 맞추기 ---------- */
+
+  const handleShapeReady = useCallback((shape: PillowShape | null) => {
+    if (!shape) {
+      setFrame(null);
+      return;
+    }
+    const { minX, maxX, minY, maxY } = shape.extent;
+    let left = minX;
+    let right = maxX;
+    if (shape.strapTip) {
+      // 금속 링과 손목줄이 끈 바깥으로 더 뻗는다
+      const reach = shape.strapTip.x + shape.strapTip.outward * HARDWARE_REACH;
+      left = Math.min(left, reach);
+      right = Math.max(right, reach);
+    }
+    setFrame({
+      cx: (left + right) / 2,
+      cy: (minY + maxY) / 2,
+      width: right - left,
+      height: maxY - minY,
+    });
+  }, []);
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setViewport({
+        width: Math.max(1, entry.contentRect.width),
+        height: Math.max(1, entry.contentRect.height),
+      });
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  const view = useMemo(() => {
+    if (!frame) return null;
+    const fov = 40;
+    const half = Math.tan((fov * Math.PI) / 360);
+    const aspect = viewport.width / viewport.height;
+    // 세로로도 가로로도 잘리지 않는 거리를 고른다
+    const distance =
+      Math.max(frame.height / 2 / half, frame.width / 2 / half / aspect, 1.5) *
+      1.22;
+    return {
+      fov,
+      distance,
+      position: [frame.cx, frame.cy, distance] as [number, number, number],
+      target: [frame.cx, frame.cy, 0] as [number, number, number],
+    };
+  }, [frame, viewport]);
 
   /* ---------- 부자재 조작 ---------- */
 
@@ -414,15 +476,36 @@ export function Workshop({ materials, availableBases }: Props) {
           onPointerDownCapture={handlePointerDownCapture}
           onPointerUp={handlePointerUp}
         >
-          <Canvas camera={{ position: [0, 0, 5.2], fov: 40 }} dpr={[1, 2]}>
-            <ambientLight intensity={1.1} />
-            <directionalLight position={[3, 4, 6]} intensity={1.6} />
-            <directionalLight position={[-4, -2, -5]} intensity={0.7} />
+          <Canvas
+            camera={{ position: [0, 0, 6], fov: 40 }}
+            dpr={[1, 2]}
+            /* 사진 색을 그대로 살리기 위해 자동 밝기 보정을 끈다 */
+            gl={{ toneMapping: THREE.NoToneMapping }}
+          >
+            {view && (
+              <PerspectiveCamera
+                makeDefault
+                fov={view.fov}
+                position={view.position}
+                near={0.1}
+                far={view.distance * 6}
+              />
+            )}
+            {/*
+              사진에 이미 빛과 그림자가 담겨 있으므로 거의 평평하게 비춘다.
+              three는 빛의 세기를 원주율로 나누어 쓰므로, 사진 색을 그대로
+              재현하려면 전체 세기의 합이 약 3.14가 되어야 한다.
+              그중 일부만 방향광으로 돌려서 돌릴 때 입체감이 남게 한다.
+            */}
+            <ambientLight intensity={2.5} />
+            <directionalLight position={[2.5, 3.5, 6]} intensity={0.55} />
+            <directionalLight position={[-4, -1.5, -5]} intensity={0.35} />
             <Suspense fallback={null}>
               <KeyringBase
                 baseType={baseType}
                 onSurfacePointerDown={handleSurfacePointerDown}
                 onSurfacePointerMove={handleSurfacePointerMove}
+                onShapeReady={handleShapeReady}
               />
               {placements.map((placement) => {
                 const material = materialById.get(placement.materialId);
@@ -474,8 +557,9 @@ export function Workshop({ materials, availableBases }: Props) {
             <OrbitControls
               enabled={controlsEnabled}
               enablePan={false}
-              minDistance={3}
-              maxDistance={9}
+              target={view?.target}
+              minDistance={view ? view.distance * 0.45 : 3}
+              maxDistance={view ? view.distance * 2.4 : 9}
             />
           </Canvas>
         </div>
