@@ -12,6 +12,7 @@ import * as THREE from "three";
 import { Canvas, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import { autoTrimImage } from "@/lib/auto-trim";
+import { getSupabase, type MaterialRow } from "@/lib/supabase";
 import type { PillowShape } from "@/lib/pillow-geometry";
 import { HOOK_HEIGHT } from "./Hook";
 import { KeyringBase } from "./KeyringBase";
@@ -184,6 +185,37 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
   // 폴더 사진은 다듬은 뒤에 쓴다
   const [folderMaterials, setFolderMaterials] = useState<Material[]>(materials);
   const [folderHooks, setFolderHooks] = useState<Material[]>(hooks);
+  // 선생님 재료함(Supabase)에서 가져온 재료. 연결이 없으면 그냥 비어 있다
+  const [savedMaterials, setSavedMaterials] = useState<Material[]>([]);
+  const [savedHooks, setSavedHooks] = useState<Material[]>([]);
+
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    let alive = true;
+    supabase
+      .from("upcycling_materials")
+      .select("id, kind, name, category, image_url, base_scale, is_active, sort_order")
+      // 숨긴 재료는 학생 화면에서 완전히 사라져야 한다
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true })
+      .then(({ data, error }) => {
+        if (!alive || error || !data) return;
+        const rows = data as MaterialRow[];
+        const toMaterial = (row: MaterialRow): Material => ({
+          id: `saved-${row.id}`,
+          name: row.name,
+          imageUrl: row.image_url,
+          baseScale: Number(row.base_scale) || 1,
+          category: (row.category as Material["category"]) ?? "기타",
+        });
+        setSavedMaterials(rows.filter((r) => r.kind === "deco").map(toMaterial));
+        setSavedHooks(rows.filter((r) => r.kind === "hook").map(toMaterial));
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -209,8 +241,8 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
   }, [hooks]);
 
   const allMaterials = useMemo(
-    () => [...folderMaterials, ...addedMaterials],
-    [folderMaterials, addedMaterials],
+    () => [...savedMaterials, ...folderMaterials, ...addedMaterials],
+    [savedMaterials, folderMaterials, addedMaterials],
   );
   const materialById = useMemo(
     () => new Map(allMaterials.map((m) => [m.id, m])),
@@ -218,8 +250,8 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
   );
   const picked = pickedId ? materialById.get(pickedId) : undefined;
   const allHooks = useMemo(
-    () => [...folderHooks, ...hookMaterials],
-    [folderHooks, hookMaterials],
+    () => [...savedHooks, ...folderHooks, ...hookMaterials],
+    [savedHooks, folderHooks, hookMaterials],
   );
   const hookMaterial = allHooks.find((m) => m.id === hookId) ?? null;
   const selected = placements.find((p) => p.id === selectedId) ?? null;
