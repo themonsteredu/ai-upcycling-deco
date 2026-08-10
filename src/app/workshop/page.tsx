@@ -4,7 +4,12 @@ import Link from "next/link";
 import { WorkshopClient } from "@/components/workshop/WorkshopClient";
 import type { BaseType, Material } from "@/lib/workshop-types";
 
-export const dynamic = "force-dynamic";
+/*
+ * 사진 목록은 화면을 열 때가 아니라 앱을 만들 때 한 번만 읽는다.
+ * Vercel에 올리면 서버 쪽에 public 폴더가 없어서 그때 읽으면 빈 목록이 나온다.
+ * 사진을 새로 넣으면 다시 올리기만 하면 반영된다.
+ */
+export const dynamic = "force-static";
 
 const PUBLIC_DIR = path.join(process.cwd(), "public");
 const IMAGE_PATTERN = /\.(png|jpg|jpeg|webp)$/i;

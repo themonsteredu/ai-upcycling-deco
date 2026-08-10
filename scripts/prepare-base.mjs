@@ -108,13 +108,9 @@ function removeBackground(data, width, height) {
  */
 function measureBody(data, width, height) {
   const columns = new Int32Array(width);
-  const rows = new Int32Array(height);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      if (data[(y * width + x) * 4 + 3] > 128) {
-        columns[x]++;
-        rows[y]++;
-      }
+      if (data[(y * width + x) * 4 + 3] > 128) columns[x]++;
     }
   }
 
@@ -130,18 +126,39 @@ function measureBody(data, width, height) {
   };
 
   const horizontal = span(columns);
-  const vertical = span(rows);
-  if (!horizontal || !vertical) return null;
+  if (!horizontal) return null;
+
+  // 세로는 몸통 구간 안에서 실루엣의 위아래 끝을 그대로 쓴다.
+  // 베개 모양이라 위아래가 오목해서, 촘촘한 정도로 재면 짧게 나온다.
+  let top = height;
+  let bottom = -1;
+  for (let y = 0; y < height; y++) {
+    for (let x = horizontal[0]; x <= horizontal[1]; x++) {
+      if (data[(y * width + x) * 4 + 3] <= 128) continue;
+      if (y < top) top = y;
+      if (y > bottom) bottom = y;
+      break;
+    }
+  }
+  if (bottom < 0) return null;
 
   return {
     width: horizontal[1] - horizontal[0] + 1,
-    height: vertical[1] - vertical[0] + 1,
+    height: bottom - top + 1,
   };
+}
+
+/** 네 모서리가 이미 투명하면 배경 지우기를 건너뛴다 */
+function alreadyTransparent(data, width, height) {
+  const size = width * height;
+  const corners = [0, (width - 1) * 4, (size - width) * 4, (size - 1) * 4];
+  return corners.every((offset) => data[offset + 3] < 8);
 }
 
 async function prepare(fileName) {
   const originalPath = path.join(ORIGINAL_DIR, fileName);
   const outputPath = path.join(BASE_DIR, fileName);
+  const beforeSize = fs.statSync(outputPath).size;
 
   // 원본을 아직 따로 보관하지 않았다면 지금 옮겨 둔다
   if (!fs.existsSync(originalPath)) {
@@ -149,32 +166,34 @@ async function prepare(fileName) {
     fs.copyFileSync(outputPath, originalPath);
   }
 
-  const image = sharp(originalPath).ensureAlpha();
-  const { data, info } = await image
+  const { data, info } = await sharp(originalPath)
+    .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
 
-  removeBackground(data, info.width, info.height);
+  const skipped = alreadyTransparent(data, info.width, info.height);
+  if (!skipped) removeBackground(data, info.width, info.height);
 
-  // 사진은 자르지 않고 크기 그대로 저장한다
+  // 사진은 자르지 않고 크기 그대로, 화질 손실 없이 최대한 압축해 저장한다.
+  // 태블릿 30대가 한꺼번에 받아야 하므로 용량이 작을수록 좋다.
   await sharp(data, {
     raw: { width: info.width, height: info.height, channels: 4 },
   })
-    .png()
+    .png({ compressionLevel: 9, effort: 10 })
     .toFile(outputPath);
 
+  const afterSize = fs.statSync(outputPath).size;
+  const mb = (bytes) => (bytes / 1048576).toFixed(2);
   const body = measureBody(data, info.width, info.height);
-  if (!body) {
-    console.log(`  ${fileName}: 배경만 지웠습니다 (모양을 재지 못함)`);
-    return null;
-  }
 
-  const aspect = body.width / body.height;
   console.log(
-    `  ${fileName}: 배경 지움 · 쿠션 몸통 ${body.width}×${body.height}` +
-      `  (가로:세로 = ${aspect.toFixed(2)} : 1)`,
+    `  ${fileName}: ${skipped ? "배경 이미 투명" : "배경 지움"} · ` +
+      `${mb(beforeSize)}MB → ${mb(afterSize)}MB` +
+      (body
+        ? ` · 쿠션 몸통 가로:세로 = ${(body.width / body.height).toFixed(2)} : 1`
+        : ""),
   );
-  return aspect;
+  return body ? body.width / body.height : null;
 }
 
 async function main() {

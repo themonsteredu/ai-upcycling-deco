@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 손질 전 원본 사진 (git 기록에 이미 남아 있고, 배포에는 필요 없다)
+/public/base/_original/
