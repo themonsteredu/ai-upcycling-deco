@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
 import { createPillowFromImage, type PillowShape } from "@/lib/pillow-geometry";
 import type { BaseType } from "@/lib/workshop-types";
@@ -64,14 +65,21 @@ export function KeyringBase({
           map={front}
           roughness={0.92}
           metalness={0}
-          alphaTest={0.5}
+          /*
+           * 앞뒤 두 겹이 만나는 솔기가 사진의 투명 경계와 겹친다.
+           * 0.5로 자르면 그 줄이 통째로 사라져 옆에서 볼 때 속이 비친다.
+           * 기준을 낮춰 솔기가 남게 한다.
+           */
+          alphaTest={0.05}
+          side={THREE.DoubleSide}
         />
         <meshStandardMaterial
           attach="material-1"
           map={back}
           roughness={0.92}
           metalness={0}
-          alphaTest={0.5}
+          alphaTest={0.05}
+          side={THREE.DoubleSide}
         />
       </mesh>
     </group>

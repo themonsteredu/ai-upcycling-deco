@@ -11,7 +11,7 @@ export const CUSHION = {
 } as const;
 
 /** 사진을 이 정도 격자로 줄여서 모양을 읽는다. 높을수록 매끈하지만 무거워짐 */
-const GRID_MAX = 180;
+const GRID_MAX = 300;
 /** 이 알파값 위를 "물건이 있는 곳"으로 본다 */
 const ALPHA_CUT = 128;
 /**
@@ -22,7 +22,7 @@ const ALPHA_CUT = 128;
  * 격자가 먼저 끊겨 테두리가 계단처럼 보인다.
  * 그래서 격자는 넉넉히 만들어 두고, 실제 잘라내기는 원본 사진의 투명도에 맡긴다.
  */
-const ALPHA_KEEP = 4;
+const ALPHA_KEEP = 60;
 /**
  * 가장 두꺼운 지점까지의 몇 %만 들어가면 최대 두께에 도달할지.
  * 낮을수록 넓고 평평하게 부풀고, 가장자리에서 급히 얇아진다.
@@ -216,11 +216,12 @@ export async function createPillowFromImage(url: string): Promise<PillowShape> {
         ) {
           continue;
         }
+        // 격자의 세로 방향은 화면 아래쪽이므로, 앞장이 앞을 보게 하려면
+        // 이 순서로 감아야 한다. (반대로 감으면 면이 뒤집혀 부자재가 파묻힌다)
         if (sheet === 0) {
-          target.push(base + a, base + b, base + c, base + b, base + d, base + c);
-        } else {
-          // 뒷장은 바깥을 향하도록 감는 방향을 뒤집는다
           target.push(base + a, base + c, base + b, base + b, base + c, base + d);
+        } else {
+          target.push(base + a, base + b, base + c, base + b, base + d, base + c);
         }
       }
     }

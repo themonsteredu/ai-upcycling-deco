@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import Link from "next/link";
 import { WorkshopClient } from "@/components/workshop/WorkshopClient";
-import type { BaseType, Material } from "@/lib/workshop-types";
+import type { BaseType, Material, MaterialCategory } from "@/lib/workshop-types";
 
 /*
  * 사진 목록은 화면을 열 때가 아니라 앱을 만들 때 한 번만 읽는다.
@@ -22,8 +22,8 @@ function readImageDir(dir: string) {
   }
 }
 
-/** 파일 이름으로 분류를 추측한다. 2단계에서 선생님이 직접 고르게 바뀐다. */
-function guessCategory(fileName: string): Material["category"] {
+/** 파일 이름으로 분류를 추측한다. 나중에 선생님이 직접 고르게 바뀐다. */
+function guessCategory(fileName: string): MaterialCategory {
   if (/scrap|fabric|cloth|denim/i.test(fileName)) return "천 조각";
   if (/button/i.test(fileName)) return "단추";
   if (/eye|mouth|nose|face|cheek/i.test(fileName)) return "얼굴 부속";
@@ -40,9 +40,12 @@ export default function WorkshopPage() {
   const materials: Material[] = readImageDir("materials")
     .sort()
     .map((file) => ({
-      id: file,
+      id: `folder-${file}`,
+      kind: "image" as const,
       name: file.replace(IMAGE_PATTERN, "").replace(/[-_]/g, " "),
       imageUrl: `/materials/${file}`,
+      // 비율은 브라우저에서 사진을 읽어 알아낸다
+      aspect: undefined as unknown as number,
       baseScale: 1,
       category: guessCategory(file),
     }));
