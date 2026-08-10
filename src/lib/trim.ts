@@ -20,6 +20,12 @@ export type TrimSettings = {
   shrink: number;
   /** 가장자리 계단 모양을 부드럽게 할 픽셀 수 */
   feather: number;
+  /**
+   * true면 사진 바깥에서 이어져 들어온 곳만 지운다.
+   * 단추 위의 흰 반사광처럼 배경색과 비슷한 부분이 한가운데 뚫리는 것을 막는다.
+   * false면 같은 색이면 어디든 지운다 — 단추 구멍을 뚫을 때 필요하다.
+   */
+  edgeOnly: boolean;
 };
 
 export const DEFAULT_TRIM: TrimSettings = {
@@ -27,6 +33,7 @@ export const DEFAULT_TRIM: TrimSettings = {
   tolerance: 45,
   shrink: 1,
   feather: 1,
+  edgeOnly: false,
 };
 
 /** 찍은 색과의 거리로 투명도를 정한다. 경계는 부드럽게 이어 준다. */
@@ -35,7 +42,6 @@ function alphaFromColors(
   count: number,
   keys: number[],
   tolerance: number,
-  brush: Uint8Array,
 ) {
   const alpha = new Uint8ClampedArray(count);
   // 경계가 칼같이 끊기지 않도록 여유 구간을 둔다
@@ -43,15 +49,6 @@ function alphaFromColors(
   const keyCount = keys.length / 3;
 
   for (let i = 0; i < count; i++) {
-    const mark = brush[i];
-    if (mark === BRUSH_ERASE) {
-      alpha[i] = 0;
-      continue;
-    }
-    if (mark === BRUSH_KEEP) {
-      alpha[i] = 255;
-      continue;
-    }
     // 원래 사진에서 이미 투명한 곳은 그대로 둔다
     const own = rgba[i * 4 + 3];
     if (own === 0) {
@@ -78,6 +75,55 @@ function alphaFromColors(
     if (distance <= tolerance) alpha[i] = 0;
     else if (distance >= tolerance + soft) alpha[i] = own;
     else alpha[i] = (own * (distance - tolerance)) / soft;
+  }
+  return alpha;
+}
+
+/**
+ * 사진 바깥에서 이어져 들어온 곳만 남기고, 안쪽에 동떨어져 지워진 곳은 되살린다.
+ *
+ * 노란 별 단추 위의 흰 반사광처럼 배경색과 비슷한 부분이
+ * 물건 한가운데에서 뻥 뚫려 버리는 것을 막는다.
+ */
+function keepOnlyOuter(
+  alpha: Uint8ClampedArray,
+  rgba: Uint8ClampedArray,
+  width: number,
+  height: number,
+) {
+  const count = width * height;
+  const reached = new Uint8Array(count);
+  const stack: number[] = [];
+
+  const visit = (x: number, y: number) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return;
+    const index = y * width + x;
+    if (reached[index]) return;
+    // 완전히 남기기로 한 곳에서는 더 번지지 않는다
+    if (alpha[index] >= 255) return;
+    reached[index] = 1;
+    stack.push(x, y);
+  };
+
+  for (let x = 0; x < width; x++) {
+    visit(x, 0);
+    visit(x, height - 1);
+  }
+  for (let y = 0; y < height; y++) {
+    visit(0, y);
+    visit(width - 1, y);
+  }
+  while (stack.length) {
+    const y = stack.pop() as number;
+    const x = stack.pop() as number;
+    visit(x + 1, y);
+    visit(x - 1, y);
+    visit(x, y + 1);
+    visit(x, y - 1);
+  }
+
+  for (let i = 0; i < count; i++) {
+    if (!reached[i]) alpha[i] = rgba[i * 4 + 3];
   }
   return alpha;
 }
@@ -158,8 +204,16 @@ export function applyTrim(
     count,
     keys,
     settings.tolerance,
-    brush,
   );
+  if (settings.edgeOnly) alpha = keepOnlyOuter(alpha, data, width, height);
+
+  // 손으로 문지른 자국은 어떤 설정보다 우선한다
+  for (let i = 0; i < count; i++) {
+    const mark = brush[i];
+    if (mark === BRUSH_ERASE) alpha[i] = 0;
+    else if (mark === BRUSH_KEEP) alpha[i] = 255;
+  }
+
   alpha = shrinkAlpha(alpha, width, height, Math.round(settings.shrink));
   alpha = featherAlpha(alpha, width, height, Math.round(settings.feather));
 

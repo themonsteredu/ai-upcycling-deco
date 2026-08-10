@@ -385,6 +385,49 @@ export function TrimStage({ image, crop, onDone, onBack }: Props) {
         />
 
         <section>
+          <p className="text-sm font-bold">어디까지 지울까요</p>
+          <div className="mt-2 space-y-2">
+            {(
+              [
+                [
+                  false,
+                  "구멍까지 뚫기",
+                  "단추 구멍처럼 안쪽에 갇힌 배경도 뚫습니다",
+                ],
+                [
+                  true,
+                  "바깥 배경만",
+                  "물건 위의 흰 반사광이 뚫리지 않습니다",
+                ],
+              ] as [boolean, string, string][]
+            ).map(([value, label, hint]) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => {
+                  pushHistory();
+                  setSettings((current) => ({ ...current, edgeOnly: value }));
+                }}
+                className={`w-full rounded-lg px-3 py-2 text-left ${
+                  settings.edgeOnly === value
+                    ? "bg-brand text-white"
+                    : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                <span className="block text-sm font-bold">{label}</span>
+                <span
+                  className={`block text-xs ${
+                    settings.edgeOnly === value ? "text-white/80" : "text-slate-500"
+                  }`}
+                >
+                  {hint}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section>
           <p className="text-sm font-bold">④ 손으로 지우기</p>
           <div className="mt-2 flex gap-2">
             {(
