@@ -17,6 +17,7 @@ type Props = {
   /** 끈 끝에 걸 고리. 고르지 않았으면 null */
   hookMaterial: Material | null;
   hookScale: number;
+  hookAngle: number;
 };
 
 export function KeyringBase({
@@ -26,6 +27,7 @@ export function KeyringBase({
   onShapeReady,
   hookMaterial,
   hookScale,
+  hookAngle,
 }: Props) {
   const frontUrl = `/base/${baseType}-front.png`;
   const front = usePreparedTexture(frontUrl);
@@ -109,6 +111,7 @@ export function KeyringBase({
           material={hookMaterial}
           strapTip={shape.strapTip}
           scale={hookScale}
+          angle={hookAngle}
         />
       )}
     </group>

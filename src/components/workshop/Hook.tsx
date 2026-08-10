@@ -20,6 +20,8 @@ type Props = {
   strapTip: NonNullable<PillowShape["strapTip"]>;
   /** 기본 크기 대비 배율 */
   scale: number;
+  /** 고리를 돌린 각도 (도) */
+  angle: number;
 };
 
 /**
@@ -28,7 +30,7 @@ type Props = {
  * 사진을 평평한 판으로 붙이면 옆에서 볼 때 사라지므로,
  * 키링 본체와 같은 방법으로 사진 실루엣에 두께를 넣어 3D로 만든다.
  */
-export function Hook({ material, strapTip, scale }: Props) {
+export function Hook({ material, strapTip, scale, angle }: Props) {
   const texture = usePreparedTexture(material.imageUrl);
   const mirrored = usePreparedTexture(material.imageUrl, true);
   const [shape, setShape] = useState<PillowShape | null>(null);
@@ -58,14 +60,21 @@ export function Hook({ material, strapTip, scale }: Props) {
 
   if (!shape) return null;
 
-  // 고리의 안쪽 끝이 끈 끝에 살짝 걸치도록 옆으로 밀어 둔다
+  // 돌린 뒤의 가로 반지름을 다시 재서, 어떤 각도로 돌려도
+  // 고리의 안쪽 끝이 끈 끝에 똑같이 걸치도록 한다
+  const radians = (angle * Math.PI) / 180;
   const halfWidth = (shape.extent.maxX - shape.extent.minX) / 2;
-  const x = strapTip.x + strapTip.outward * (halfWidth - OVERLAP);
+  const halfHeight = (shape.extent.maxY - shape.extent.minY) / 2;
+  const reach =
+    Math.abs(halfWidth * Math.cos(radians)) +
+    Math.abs(halfHeight * Math.sin(radians));
+  const x = strapTip.x + strapTip.outward * (reach - OVERLAP);
 
   return (
     <mesh
       geometry={shape.geometry}
       position={[x, strapTip.y, 0]}
+      rotation={[0, 0, radians]}
       raycast={() => null}
     >
       <meshStandardMaterial

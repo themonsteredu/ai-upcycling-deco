@@ -50,6 +50,8 @@ export type WorkshopDraft = {
   hookMaterials: Material[];
   /** 지금 걸어 둔 고리. 없으면 null */
   hookId: string | null;
+  /** 고리를 돌린 각도 (도) */
+  hookAngle: number;
 };
 
 /** 고리 크기 조절 범위 */

@@ -76,6 +76,7 @@ function readDraft(availableBases: BaseType[]): WorkshopDraft | null {
         ? draft.hookMaterials
         : [],
       hookId: draft?.hookId ?? null,
+      hookAngle: draft?.hookAngle ?? 0,
     };
   } catch {
     return null;
@@ -152,6 +153,7 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
     initialDraft?.hookId ?? null,
   );
   const [hookScale, setHookScale] = useState(1);
+  const [hookAngle, setHookAngle] = useState(initialDraft?.hookAngle ?? 0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [size, setSizeState] = useState(1);
@@ -276,13 +278,14 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
       addedMaterials,
       hookMaterials,
       hookId,
+      hookAngle,
     };
     try {
       window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
     } catch {
       // 저장 공간이 부족해도 작업은 계속되어야 한다
     }
-  }, [baseType, placements, addedMaterials, hookMaterials, hookId]);
+  }, [baseType, placements, addedMaterials, hookMaterials, hookId, hookAngle]);
 
   /* ---------- 화면에 꽉 차게 맞추기 ---------- */
 
@@ -305,7 +308,12 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
       const tip = baseShape.strapTip;
       const hookHeight = HOOK_HEIGHT * hookScale;
       const hookWidth = hookHeight * (hookMaterial.aspect ?? 1);
-      const far = tip.x + tip.outward * hookWidth;
+      // 돌리면 차지하는 폭이 달라진다
+      const radians = (hookAngle * Math.PI) / 180;
+      const span =
+        Math.abs(hookWidth * Math.cos(radians)) +
+        Math.abs(hookHeight * Math.sin(radians));
+      const far = tip.x + tip.outward * span;
       left = Math.min(left, far);
       right = Math.max(right, far);
       top = Math.max(top, tip.y + hookHeight / 2);
@@ -318,7 +326,7 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
       width: right - left,
       height: top - bottom,
     };
-  }, [baseShape, hookMaterial, hookScale]);
+  }, [baseShape, hookMaterial, hookScale, hookAngle]);
 
   useEffect(() => {
     const element = containerRef.current;
@@ -866,6 +874,18 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
                 }
                 className="mt-1 w-full accent-brand"
               />
+              <div className="mt-2 flex justify-between text-[11px] font-light text-slate-400">
+                <span>고리 방향</span>
+                <span>{hookAngle}°</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={359}
+                value={hookAngle}
+                onChange={(event) => setHookAngle(Number(event.target.value))}
+                className="mt-1 w-full accent-brand"
+              />
             </div>
           )}
 
@@ -972,6 +992,7 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
                 onShapeReady={handleShapeReady}
                 hookMaterial={hookMaterial}
                 hookScale={hookScale}
+                hookAngle={hookAngle}
               />
               {placements.map((placement) => {
                 const material = materialById.get(placement.materialId);
