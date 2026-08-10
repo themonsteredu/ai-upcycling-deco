@@ -129,7 +129,7 @@ function keepOnlyOuter(
 }
 
 /** 남은 부분을 사방으로 조금씩 깎는다 (가로·세로 두 번에 나눠 빠르게) */
-function shrinkAlpha(
+export function shrinkAlpha(
   alpha: Uint8ClampedArray,
   width: number,
   height: number,
@@ -160,7 +160,7 @@ function shrinkAlpha(
 }
 
 /** 가장자리 계단 모양을 흐리게 만든다 */
-function featherAlpha(
+export function featherAlpha(
   alpha: Uint8ClampedArray,
   width: number,
   height: number,

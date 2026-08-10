@@ -11,6 +11,7 @@ import {
 import * as THREE from "three";
 import { Canvas, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
+import { autoTrimImage } from "@/lib/auto-trim";
 import type { PillowShape } from "@/lib/pillow-geometry";
 import { KeyringBase } from "./KeyringBase";
 import { Deco } from "./Deco";
@@ -19,7 +20,6 @@ import {
   DRAFT_STORAGE_KEY,
   SIZE_MAX,
   SIZE_MIN,
-  UPLOAD_MAX_PX,
   type BaseType,
   type Material,
   type Placement,
@@ -72,39 +72,35 @@ function readDraft(availableBases: BaseType[]): WorkshopDraft | null {
   }
 }
 
-/** 넣은 사진을 작게 줄여 브라우저에 담을 수 있는 형태로 만든다 */
-function shrinkToDataUrl(file: File) {
-  return new Promise<{ dataUrl: string; aspect: number } | null>((resolve) => {
-    const objectUrl = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      const scale = Math.min(
-        1,
-        UPLOAD_MAX_PX / Math.max(image.naturalWidth, image.naturalHeight),
-      );
-      const width = Math.max(1, Math.round(image.naturalWidth * scale));
-      const height = Math.max(1, Math.round(image.naturalHeight * scale));
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const context = canvas.getContext("2d");
-      URL.revokeObjectURL(objectUrl);
-      if (!context) {
+/**
+ * 넣은 사진의 배경을 자동으로 지우고 딱 맞게 잘라, 브라우저에 담을 수 있는
+ * 크기로 만든다. 자동으로 안 되면 원본을 그대로 쓴다.
+ */
+function prepareUpload(file: File) {
+  return new Promise<{ dataUrl: string; aspect: number; trimmed: boolean } | null>(
+    (resolve) => {
+      const objectUrl = URL.createObjectURL(file);
+      const image = new Image();
+      image.onload = () => {
+        const result = autoTrimImage(image);
+        URL.revokeObjectURL(objectUrl);
+        if (!result) {
+          resolve(null);
+          return;
+        }
+        resolve({
+          dataUrl: result.dataUrl,
+          aspect: result.aspect,
+          trimmed: result.removedBackground,
+        });
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
         resolve(null);
-        return;
-      }
-      context.drawImage(image, 0, 0, width, height);
-      resolve({
-        dataUrl: canvas.toDataURL("image/png"),
-        aspect: image.naturalWidth / image.naturalHeight,
-      });
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve(null);
-    };
-    image.src = objectUrl;
-  });
+      };
+      image.src = objectUrl;
+    },
+  );
 }
 
 export function Workshop({ materials, availableBases }: Props) {
@@ -456,23 +452,31 @@ export function Workshop({ materials, availableBases }: Props) {
         Array.from(files)
           .filter((file) => file.type.startsWith("image/"))
           .map(async (file) => {
-            const shrunk = await shrinkToDataUrl(file);
-            if (!shrunk) return null;
+            const prepared = await prepareUpload(file);
+            if (!prepared) return null;
             const material: Material = {
               id: `added-${crypto.randomUUID()}`,
               name: file.name.replace(/\.[^.]+$/, "").slice(0, 10),
-              imageUrl: shrunk.dataUrl,
-              aspect: shrunk.aspect,
+              imageUrl: prepared.dataUrl,
+              aspect: prepared.aspect,
               category: "기타",
               baseScale: 1,
             };
-            return material;
+            return { material, trimmed: prepared.trimmed };
           }),
       );
-      const added: Material[] = loaded.filter((m) => m !== null);
-      if (added.length === 0) return;
-      setAddedMaterials((prev) => [...prev, ...added]);
-      say(`${added.length}개 재료를 넣었어요`);
+      const ok = loaded.filter((item) => item !== null);
+      if (ok.length === 0) {
+        say("사진을 읽지 못했어요");
+        return;
+      }
+      setAddedMaterials((prev) => [...prev, ...ok.map((item) => item.material)]);
+      const trimmedCount = ok.filter((item) => item.trimmed).length;
+      say(
+        trimmedCount > 0
+          ? `${ok.length}개 넣었어요 · 배경 ${trimmedCount}개 지움`
+          : `${ok.length}개 재료를 넣었어요`,
+      );
     },
     [say],
   );
