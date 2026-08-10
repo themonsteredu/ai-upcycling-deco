@@ -1,5 +1,9 @@
 import Link from "next/link";
-import { getSupabaseAdmin, STORAGE_BUCKET } from "@/lib/supabase";
+import {
+  getSupabaseAdmin,
+  STORAGE_BUCKET,
+  supabaseUrlLooksWrong,
+} from "@/lib/supabase";
 import { hasTeacherPassword } from "@/lib/teacher-auth";
 
 export const dynamic = "force-dynamic";
@@ -31,8 +35,10 @@ async function runChecks(): Promise<Check[]> {
     },
     {
       label: "Supabase 주소",
-      ok: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
-      fix: "Vercel 환경변수에 NEXT_PUBLIC_SUPABASE_URL 을 넣어 주세요.",
+      ok: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL) && !supabaseUrlLooksWrong,
+      fix: supabaseUrlLooksWrong
+        ? "값은 들어갔는데 주소 꼴이 아닙니다. NEXT_PUBLIC_SUPABASE_URL 값을 https://내프로젝트.supabase.co 처럼 https:// 로 시작하는 한 줄로 고쳐 주세요. 따옴표나 줄바꿈이 섞이지 않게 해 주세요."
+        : "Vercel 환경변수에 NEXT_PUBLIC_SUPABASE_URL 을 넣어 주세요.",
     },
     {
       label: "학생용 열쇠",
