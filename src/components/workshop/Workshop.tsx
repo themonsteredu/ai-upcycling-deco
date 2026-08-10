@@ -13,11 +13,14 @@ import { Canvas, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import { autoTrimImage } from "@/lib/auto-trim";
 import type { PillowShape } from "@/lib/pillow-geometry";
+import { HOOK_HEIGHT } from "./Hook";
 import { KeyringBase } from "./KeyringBase";
 import { Deco } from "./Deco";
 import {
   BASE_LABEL,
   DRAFT_STORAGE_KEY,
+  HOOK_SIZE_MAX,
+  HOOK_SIZE_MIN,
   SIZE_MAX,
   SIZE_MIN,
   type BaseType,
@@ -66,6 +69,10 @@ function readDraft(availableBases: BaseType[]): WorkshopDraft | null {
       addedMaterials: Array.isArray(draft?.addedMaterials)
         ? draft.addedMaterials
         : [],
+      hookMaterials: Array.isArray(draft?.hookMaterials)
+        ? draft.hookMaterials
+        : [],
+      hookId: draft?.hookId ?? null,
     };
   } catch {
     return null;
@@ -76,13 +83,13 @@ function readDraft(availableBases: BaseType[]): WorkshopDraft | null {
  * 넣은 사진의 배경을 자동으로 지우고 딱 맞게 잘라, 브라우저에 담을 수 있는
  * 크기로 만든다. 자동으로 안 되면 원본을 그대로 쓴다.
  */
-function prepareUpload(file: File) {
+function prepareUpload(file: File, punchHoles = false) {
   return new Promise<{ dataUrl: string; aspect: number; trimmed: boolean } | null>(
     (resolve) => {
       const objectUrl = URL.createObjectURL(file);
       const image = new Image();
       image.onload = () => {
-        const result = autoTrimImage(image);
+        const result = autoTrimImage(image, punchHoles);
         URL.revokeObjectURL(objectUrl);
         if (!result) {
           resolve(null);
@@ -114,17 +121,22 @@ export function Workshop({ materials, availableBases }: Props) {
   const [addedMaterials, setAddedMaterials] = useState<Material[]>(
     initialDraft?.addedMaterials ?? [],
   );
+  const [hookMaterials, setHookMaterials] = useState<Material[]>(
+    initialDraft?.hookMaterials ?? [],
+  );
+  const [hookId, setHookId] = useState<string | null>(
+    initialDraft?.hookId ?? null,
+  );
+  const [hookScale, setHookScale] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [size, setSizeState] = useState(1);
   const [rollDeg, setRollDeg] = useState(0);
   const [mode, setMode] = useState<"put" | "remove">("put");
   const [controlsEnabled, setControlsEnabled] = useState(true);
-  const [frame, setFrame] = useState<{
-    cx: number;
-    cy: number;
-    width: number;
-    height: number;
+  const [baseShape, setBaseShape] = useState<{
+    extent: PillowShape["extent"];
+    strapTip: PillowShape["strapTip"];
   } | null>(null);
   const [viewport, setViewport] = useState({ width: 1280, height: 720 });
   const [toast, setToast] = useState<string | null>(null);
@@ -132,6 +144,7 @@ export function Workshop({ materials, availableBases }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const setFileRef = useRef<HTMLInputElement>(null);
+  const hookFileRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pointerStart = useRef<{ x: number; y: number } | null>(null);
   const pendingTap = useRef<PendingTap>({ kind: "empty" });
@@ -154,6 +167,7 @@ export function Workshop({ materials, availableBases }: Props) {
     [allMaterials],
   );
   const picked = pickedId ? materialById.get(pickedId) : undefined;
+  const hookMaterial = hookMaterials.find((m) => m.id === hookId) ?? null;
   const selected = placements.find((p) => p.id === selectedId) ?? null;
   const usedKinds = new Set(placements.map((p) => p.materialId)).size;
 
@@ -170,29 +184,55 @@ export function Workshop({ materials, availableBases }: Props) {
   /* ---------- 작업 내용 저장 ---------- */
 
   useEffect(() => {
-    const draft: WorkshopDraft = { baseType, placements, addedMaterials };
+    const draft: WorkshopDraft = {
+      baseType,
+      placements,
+      addedMaterials,
+      hookMaterials,
+      hookId,
+    };
     try {
       window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
     } catch {
       // 저장 공간이 부족해도 작업은 계속되어야 한다
     }
-  }, [baseType, placements, addedMaterials]);
+  }, [baseType, placements, addedMaterials, hookMaterials, hookId]);
 
   /* ---------- 화면에 꽉 차게 맞추기 ---------- */
 
   const handleShapeReady = useCallback((shape: PillowShape | null) => {
-    if (!shape) {
-      setFrame(null);
-      return;
-    }
-    const { minX, maxX, minY, maxY } = shape.extent;
-    setFrame({
-      cx: (minX + maxX) / 2,
-      cy: (minY + maxY) / 2,
-      width: maxX - minX,
-      height: maxY - minY,
-    });
+    setBaseShape(
+      shape ? { extent: shape.extent, strapTip: shape.strapTip } : null,
+    );
   }, []);
+
+  /** 키링과 고리를 모두 담는 범위 */
+  const frame = useMemo(() => {
+    if (!baseShape) return null;
+    const { minX, maxX, minY, maxY } = baseShape.extent;
+    let left = minX;
+    let right = maxX;
+    let top = maxY;
+    let bottom = minY;
+
+    if (hookMaterial && baseShape.strapTip) {
+      const tip = baseShape.strapTip;
+      const hookHeight = HOOK_HEIGHT * hookScale;
+      const hookWidth = hookHeight * (hookMaterial.aspect ?? 1);
+      const far = tip.x + tip.outward * hookWidth;
+      left = Math.min(left, far);
+      right = Math.max(right, far);
+      top = Math.max(top, tip.y + hookHeight / 2);
+      bottom = Math.min(bottom, tip.y - hookHeight / 2);
+    }
+
+    return {
+      cx: (left + right) / 2,
+      cy: (bottom + top) / 2,
+      width: right - left,
+      height: top - bottom,
+    };
+  }, [baseShape, hookMaterial, hookScale]);
 
   useEffect(() => {
     const element = containerRef.current;
@@ -481,6 +521,39 @@ export function Workshop({ materials, availableBases }: Props) {
     [say],
   );
 
+  const addHookFiles = useCallback(
+    async (files: FileList | null) => {
+      if (!files || files.length === 0) return;
+      const loaded = await Promise.all(
+        Array.from(files)
+          .filter((file) => file.type.startsWith("image/"))
+          .map(async (file) => {
+            // 고리는 가운데가 뚫려 있어야 하므로 안쪽 배경까지 지운다
+            const prepared = await prepareUpload(file, true);
+            if (!prepared) return null;
+            const material: Material = {
+              id: `hook-${crypto.randomUUID()}`,
+              name: file.name.replace(/\.[^.]+$/, "").slice(0, 10),
+              imageUrl: prepared.dataUrl,
+              aspect: prepared.aspect,
+              category: "기타",
+              baseScale: 1,
+            };
+            return material;
+          }),
+      );
+      const added: Material[] = loaded.filter((m) => m !== null);
+      if (added.length === 0) {
+        say("사진을 읽지 못했어요");
+        return;
+      }
+      setHookMaterials((prev) => [...prev, ...added]);
+      setHookId(added[0].id);
+      say(`고리 ${added.length}개를 넣었어요`);
+    },
+    [say],
+  );
+
   const exportSet = useCallback(() => {
     const blob = new Blob([JSON.stringify(addedMaterials, null, 1)], {
       type: "application/json",
@@ -626,6 +699,88 @@ export function Workshop({ materials, availableBases }: Props) {
             })}
           </div>
 
+          <div className="flex items-center justify-between px-4 pt-4 pb-2">
+            <span className="text-[11px] font-light tracking-wider text-slate-400">
+              고리
+            </span>
+            <button
+              type="button"
+              onClick={() => hookFileRef.current?.click()}
+              className="rounded-md border border-[#23404F] bg-[#182D3C] px-2 py-1 text-[11px] text-brand"
+            >
+              + 고리 넣기
+            </button>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto px-3">
+            <button
+              type="button"
+              onClick={() => setHookId(null)}
+              className={`w-[4.5rem] shrink-0 rounded-lg border py-3 text-[10px] ${
+                hookId === null
+                  ? "border-brand bg-brand/15 text-white"
+                  : "border-transparent bg-[#182D3C] text-slate-400"
+              }`}
+            >
+              없음
+            </button>
+            {hookMaterials.map((material) => (
+              <div key={material.id} className="relative w-[4.5rem] shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setHookId(material.id)}
+                  className={`w-full rounded-lg border p-1.5 text-center ${
+                    hookId === material.id
+                      ? "border-brand bg-brand/15"
+                      : "border-transparent bg-[#182D3C]"
+                  }`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={material.imageUrl}
+                    alt=""
+                    className="mx-auto h-8 w-8 rounded bg-white/10 object-contain"
+                  />
+                  <span className="mt-1 block truncate text-[9.5px] text-slate-300">
+                    {material.name}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={`${material.name} 고리 빼기`}
+                  onClick={() => {
+                    setHookMaterials((prev) =>
+                      prev.filter((m) => m.id !== material.id),
+                    );
+                    if (hookId === material.id) setHookId(null);
+                  }}
+                  className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-black/70 text-[10px] text-rose-300"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {hookMaterial && (
+            <div className="px-4 pt-3">
+              <div className="flex justify-between text-[11px] font-light text-slate-400">
+                <span>고리 크기</span>
+                <span>{Math.round(hookScale * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min={HOOK_SIZE_MIN * 100}
+                max={HOOK_SIZE_MAX * 100}
+                value={Math.round(hookScale * 100)}
+                onChange={(event) =>
+                  setHookScale(Number(event.target.value) / 100)
+                }
+                className="mt-1 w-full accent-brand"
+              />
+            </div>
+          )}
+
           <div className="hidden gap-2 p-3 lg:flex">
             <button
               type="button"
@@ -653,6 +808,17 @@ export function Workshop({ materials, availableBases }: Props) {
           hidden
           onChange={(event) => {
             void addFiles(event.target.files);
+            event.target.value = "";
+          }}
+        />
+        <input
+          ref={hookFileRef}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(event) => {
+            void addHookFiles(event.target.files);
             event.target.value = "";
           }}
         />
@@ -716,6 +882,8 @@ export function Workshop({ materials, availableBases }: Props) {
                 onSurfacePointerDown={handleSurfacePointerDown}
                 onSurfacePointerMove={handleSurfacePointerMove}
                 onShapeReady={handleShapeReady}
+                hookMaterial={hookMaterial}
+                hookScale={hookScale}
               />
               {placements.map((placement) => {
                 const material = materialById.get(placement.materialId);

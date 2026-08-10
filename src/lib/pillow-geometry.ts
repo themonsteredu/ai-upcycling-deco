@@ -37,10 +37,26 @@ const BODY_THRESHOLD = 0.4;
 
 export type PillowShape = {
   geometry: THREE.BufferGeometry;
-  /** 사진에 찍힌 것 전체가 차지하는 범위 (쿠션 몸통 가운데가 0) */
+  /** 사진에 찍힌 것 전체가 차지하는 범위 (가운데가 0) */
   extent: { minX: number; maxX: number; minY: number; maxY: number };
   /** 천의 평균 색. 키링 속을 채우는 데 쓴다 */
   fabricColor: string;
+  /** 고리 끈 끝. 고리를 걸 자리다. 끈이 없으면 null */
+  strapTip: { x: number; y: number; outward: 1 | -1 } | null;
+};
+
+export type InflateOptions = {
+  /** 실루엣 세로 길이를 이 값에 맞춘다 */
+  targetHeight?: number;
+  /** 부풀릴 두께 */
+  depth?: number;
+  /** 최대 두께에 도달하는 지점 (0~1). 낮을수록 넓고 평평하게 부푼다 */
+  plateau?: number;
+  /**
+   * true면 고리 끈처럼 성긴 부분을 뺀 몸통을 기준으로 크기를 맞춘다.
+   * 키링 본체에는 켜고, 고리처럼 통짜인 물건에는 끈다.
+   */
+  useBodySpan?: boolean;
 };
 
 /** 사진을 격자로 줄여서 알파(투명도)만 뽑아낸다 */
@@ -156,7 +172,15 @@ function denseSpan(counts: Int32Array) {
  *
  * 재질 그룹 0 = 앞면, 그룹 1 = 뒷면.
  */
-export async function createPillowFromImage(url: string): Promise<PillowShape> {
+export async function createPillowFromImage(
+  url: string,
+  options: InflateOptions = {},
+): Promise<PillowShape> {
+  const targetHeight = options.targetHeight ?? CUSHION.height;
+  const depth = options.depth ?? CUSHION.depth;
+  const plateauRatio = options.plateau ?? PLATEAU;
+  const useBodySpan = options.useBodySpan ?? true;
+
   const { alpha, rgb, width, height } = await readAlphaGrid(url);
   const distance = distanceToEdge(alpha, width, height);
 
@@ -176,9 +200,11 @@ export async function createPillowFromImage(url: string): Promise<PillowShape> {
   }
 
   // 가로: 성긴 줄(고리 끈)을 뺀 촘촘한 구간이 쿠션 몸통이다
-  const bodyX = denseSpan(columns);
-  if (!bodyX || deepest === 0) {
-    throw new Error("사진에서 키링 모양을 찾지 못했습니다");
+  const bodyX = useBodySpan
+    ? denseSpan(columns)
+    : ([minX, maxX] as const);
+  if (!bodyX || deepest === 0 || maxX < 0) {
+    throw new Error("사진에서 모양을 찾지 못했습니다");
   }
 
   // 세로: 몸통 구간 안에서 실루엣의 위아래 끝을 그대로 쓴다.
@@ -195,12 +221,12 @@ export async function createPillowFromImage(url: string): Promise<PillowShape> {
   }
   if (maxY < 0) throw new Error("사진에서 키링 모양을 찾지 못했습니다");
 
-  // 쿠션 몸통의 세로 길이가 2.1이 되도록 전체 크기를 맞춘다
-  const unit = CUSHION.height / (maxY - minY + 1);
-  const halfDepth = CUSHION.depth / 2;
+  // 몸통의 세로 길이가 정해진 값이 되도록 전체 크기를 맞춘다
+  const unit = targetHeight / (maxY - minY + 1);
+  const halfDepth = depth / 2;
   const centerX = (bodyX[0] + bodyX[1]) / 2;
   const centerY = (minY + maxY) / 2;
-  const plateau = Math.max(1, deepest * PLATEAU);
+  const plateau = Math.max(1, deepest * plateauRatio);
 
   const positions: number[] = [];
   const uvs: number[] = [];
@@ -279,8 +305,32 @@ export async function createPillowFromImage(url: string): Promise<PillowShape> {
     }
   }
 
+  // 몸통 바깥으로 튀어나온 부분 = 고리 끈. 고리를 걸 자리를 찾아둔다.
+  const leftGap = bodyX[0] - minX;
+  const rightGap = maxX - bodyX[1];
+  let strapTip: PillowShape["strapTip"] = null;
+  if (useBodySpan && Math.max(leftGap, rightGap) > 2) {
+    const outward: 1 | -1 = rightGap >= leftGap ? 1 : -1;
+    const tipX = outward === 1 ? maxX : minX;
+    let sum = 0;
+    let count = 0;
+    for (let y = 0; y < height; y++) {
+      if (alpha[y * width + tipX] > ALPHA_CUT) {
+        sum += y;
+        count++;
+      }
+    }
+    const tipY = count > 0 ? sum / count : centerY;
+    strapTip = {
+      x: (tipX - centerX) * unit,
+      y: (centerY - tipY) * unit,
+      outward,
+    };
+  }
+
   return {
     geometry,
+    strapTip,
     fabricColor: averageFabricColor(rgb, alpha, distance, deepest),
     extent: {
       minX: (minX - centerX) * unit,

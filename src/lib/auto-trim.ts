@@ -98,8 +98,16 @@ function floodRemove(
   return alpha;
 }
 
-/** 사진 한 장을 자동으로 다듬는다 */
-export function autoTrimImage(image: HTMLImageElement): AutoTrimResult | null {
+/**
+ * 사진 한 장을 자동으로 다듬는다.
+ *
+ * @param punchHoles 안쪽에 갇힌 배경까지 뚫을지 여부.
+ *   고리처럼 가운데가 뚫려 있어야 하는 물건에 켠다.
+ */
+export function autoTrimImage(
+  image: HTMLImageElement,
+  punchHoles = false,
+): AutoTrimResult | null {
   const scale = Math.min(
     1,
     MAX_PX / Math.max(image.naturalWidth, image.naturalHeight),
@@ -125,6 +133,25 @@ export function autoTrimImage(image: HTMLImageElement): AutoTrimResult | null {
       height,
       corner,
     );
+    if (punchHoles) {
+      // 하트 고리 안쪽처럼 사방이 막힌 배경도 지운다
+      for (let i = 0; i < width * height; i++) {
+        const offset = i * 4;
+        const distance = Math.hypot(
+          source.data[offset] - corner.r,
+          source.data[offset + 1] - corner.g,
+          source.data[offset + 2] - corner.b,
+        );
+        if (distance <= CLEAR_BELOW) alpha[i] = 0;
+        else if (distance < KEEP_ABOVE) {
+          alpha[i] = Math.min(
+            alpha[i],
+            ((distance - CLEAR_BELOW) / (KEEP_ABOVE - CLEAR_BELOW)) * 255,
+          );
+        }
+      }
+    }
+
     // 배경색 테두리가 남지 않게 한 겹 깎고, 계단 모양을 부드럽게
     alpha = shrinkAlpha(alpha, width, height, 1);
     alpha = featherAlpha(alpha, width, height, 1);

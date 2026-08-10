@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
 import { createPillowFromImage, type PillowShape } from "@/lib/pillow-geometry";
-import type { BaseType } from "@/lib/workshop-types";
+import type { BaseType, Material } from "@/lib/workshop-types";
+import { Hook } from "./Hook";
 import { usePreparedTexture } from "./usePreparedTexture";
 
 type Props = {
@@ -13,6 +14,9 @@ type Props = {
   onSurfacePointerMove: (event: ThreeEvent<PointerEvent>) => void;
   /** 화면에 꽉 차게 맞추려면 전체 크기를 알아야 한다 */
   onShapeReady: (shape: PillowShape | null) => void;
+  /** 끈 끝에 걸 고리. 고르지 않았으면 null */
+  hookMaterial: Material | null;
+  hookScale: number;
 };
 
 export function KeyringBase({
@@ -20,6 +24,8 @@ export function KeyringBase({
   onSurfacePointerDown,
   onSurfacePointerMove,
   onShapeReady,
+  hookMaterial,
+  hookScale,
 }: Props) {
   const frontUrl = `/base/${baseType}-front.png`;
   const front = usePreparedTexture(frontUrl);
@@ -97,6 +103,14 @@ export function KeyringBase({
           side={THREE.DoubleSide}
         />
       </mesh>
+
+      {hookMaterial && shape.strapTip && (
+        <Hook
+          material={hookMaterial}
+          strapTip={shape.strapTip}
+          scale={hookScale}
+        />
+      )}
     </group>
   );
 }
