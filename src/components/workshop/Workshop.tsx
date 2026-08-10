@@ -527,11 +527,11 @@ export function Workshop({ materials, availableBases }: Props) {
     <div className="flex h-dvh flex-col bg-[#0B1620] text-[#DCE9EF] lg:flex-row">
       {/* 왼쪽 — 원단과 재료함 */}
       <aside className="order-2 flex shrink-0 flex-col border-t border-[#23404F] bg-[#12222E] lg:order-1 lg:w-60 lg:border-t-0 lg:border-r">
-        <div className="hidden border-b border-[#23404F] px-4 py-3 lg:block">
-          <p className="text-base font-bold text-white">
-            청바지 키링 <span className="text-brand">3D 공방</span>
+        <div className="hidden border-b border-[#23404F] px-4 py-4 lg:block">
+          <p className="text-[15px] font-bold tracking-tight text-white">
+            업사이클 키링 <span className="text-brand">디자인</span>
           </p>
-          <p className="mt-1 text-[11px] text-slate-400">
+          <p className="mt-1.5 text-[11px] font-light text-slate-400">
             버려진 청바지에 새 이야기를 붙여요
           </p>
         </div>
@@ -826,7 +826,7 @@ export function Workshop({ materials, availableBases }: Props) {
             onClick={undo}
             className="rounded-lg border border-[#23404F] bg-[#182D3C] py-2.5 text-xs text-slate-200"
           >
-            ↩ 방금 것 취소
+            방금 것 취소
           </button>
           <button
             type="button"
@@ -840,7 +840,7 @@ export function Workshop({ materials, availableBases }: Props) {
             onClick={saveImage}
             className="rounded-lg bg-brand py-2.5 text-xs font-bold text-[#04262A]"
           >
-            📸 내 작품 저장하기
+            내 작품 저장하기
           </button>
         </div>
       </aside>

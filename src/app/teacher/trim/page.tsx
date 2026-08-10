@@ -1,7 +1,7 @@
 import { TrimStudio } from "@/components/teacher/TrimStudio";
 
 export const metadata = {
-  title: "재료 다듬기 — 업사이클링 키링 3D 공방",
+  title: "재료 다듬기 — 업사이클 키링 디자인",
 };
 
 /**

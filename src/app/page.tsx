@@ -34,7 +34,7 @@ export default function Home() {
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-12">
       <p className="text-sm font-semibold tracking-wide text-brand">모아킷 진로체험</p>
-      <h1 className="mt-2 text-3xl font-bold">업사이클링 키링 3D 공방</h1>
+      <h1 className="mt-2 text-3xl font-bold tracking-tight">업사이클 키링 디자인</h1>
       <p className="mt-3 leading-relaxed text-slate-600">
         청바지로 만든 키링에 부자재를 붙여 설계도를 만들고, 그 화면을 보면서 실제
         바느질로 완성합니다.

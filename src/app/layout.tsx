@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "업사이클링 키링 3D 공방",
+  title: "업사이클 키링 디자인",
   description: "청바지 업사이클링 키링을 3D로 설계하고 값을 매겨보는 진로체험 웹앱",
 };
 
