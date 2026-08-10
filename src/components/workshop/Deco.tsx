@@ -13,7 +13,7 @@ import {
 } from "@/lib/workshop-types";
 import { usePreparedTexture } from "./usePreparedTexture";
 
-export type HandleKind = "resize" | "rotate";
+export type HandleKind = "resize" | "rotate" | "stretchX" | "stretchY";
 
 /** 부자재를 가로세로 몇 칸으로 쪼개 곡면에 맞출지 */
 const SEGMENTS = 18;
@@ -41,12 +41,15 @@ export function Deco({
   const texture = usePreparedTexture(material.imageUrl);
   const size = DECO_UNIT * material.baseScale * placement.size;
 
-  // 사진의 가로세로 비율대로 붙인다. 긴 변을 기준으로 맞춘다.
+  // 사진의 가로세로 비율대로 붙이되, 따로 늘린 값이 있으면 그만큼 늘인다.
   const [width, height] = useMemo(() => {
     const image = texture.image as { width?: number; height?: number } | undefined;
     const ratio = material.aspect ?? (image?.width ?? 1) / (image?.height ?? 1);
-    return ratio >= 1 ? [size, size / ratio] : [size * ratio, size];
-  }, [texture, material.aspect, size]);
+    const [base, across] =
+      ratio >= 1 ? [size, size / ratio] : [size * ratio, size];
+    const [stretchX, stretchY] = placement.stretch ?? [1, 1];
+    return [base * stretchX, across * stretchY];
+  }, [texture, material.aspect, size, placement.stretch]);
 
   const quaternion = useMemo(
     () => new THREE.Quaternion(...placement.quaternion),
@@ -127,6 +130,18 @@ export function Deco({
             position={handleSpot(width / 2 + 0.03, -height / 2 - 0.03, localZ)}
             face="#0DBDB9"
             onPointerDown={(event) => onHandleDown?.("resize", event)}
+          />
+          {/* 옆구리 — 가로만 늘어난다 */}
+          <Handle
+            position={handleSpot(width / 2 + 0.14, 0, localZ)}
+            face="#FFC94A"
+            onPointerDown={(event) => onHandleDown?.("stretchX", event)}
+          />
+          {/* 아래 — 세로만 늘어난다 */}
+          <Handle
+            position={handleSpot(0, -height / 2 - 0.14, localZ)}
+            face="#FFC94A"
+            onPointerDown={(event) => onHandleDown?.("stretchY", event)}
           />
           <Handle
             position={handleSpot(0, height / 2 + 0.22, localZ)}

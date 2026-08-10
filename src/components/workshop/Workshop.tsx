@@ -24,6 +24,8 @@ import {
   HOOK_SIZE_MIN,
   SIZE_MAX,
   SIZE_MIN,
+  STRETCH_MAX,
+  STRETCH_MIN,
   type BaseType,
   type Material,
   type Placement,
@@ -58,10 +60,14 @@ type HandleDrag = {
   /** 부자재 한가운데의 화면 좌표 */
   centerX: number;
   centerY: number;
+  /** 화면에서 손잡이가 놓인 방향. 가로·세로만 늘릴 때 이 방향으로만 잰다 */
+  axisX: number;
+  axisY: number;
   startDistance: number;
   startAngle: number;
   startSize: number;
   startRoll: number;
+  startStretch: [number, number];
 };
 
 /** 지금 쓰이는 카메라를 바깥에서 쓸 수 있게 꺼내 둔다 */
@@ -139,6 +145,7 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [size, setSizeState] = useState(1);
+  const [stretch, setStretch] = useState<[number, number]>([1, 1]);
   const [rollDeg, setRollDeg] = useState(0);
   const [mode, setMode] = useState<"put" | "remove">("put");
   const [controlsEnabled, setControlsEnabled] = useState(true);
@@ -359,6 +366,26 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
     [updateSelected],
   );
 
+  /** 가로(0)나 세로(1)만 따로 늘린다 */
+  const applyStretch = useCallback(
+    (axis: 0 | 1, value: number) => {
+      const next = clamp(value, STRETCH_MIN, STRETCH_MAX);
+      setStretch((prev) => {
+        const both: [number, number] = [prev[0], prev[1]];
+        both[axis] = next;
+        return both;
+      });
+      if (!selectedIdRef.current) return;
+      updateSelected((p) => {
+        const current = p.stretch ?? [1, 1];
+        const both: [number, number] = [current[0], current[1]];
+        both[axis] = next;
+        return { ...p, stretch: both };
+      });
+    },
+    [updateSelected],
+  );
+
   const applyRoll = useCallback(
     (degrees: number) => {
       const wrapped = ((Math.round(degrees) % 360) + 360) % 360;
@@ -432,6 +459,7 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
         setSelectedId(tap.id);
         if (target) {
           setSizeState(target.size);
+          setStretch(target.stretch ?? [1, 1]);
           setRollDeg(Math.round((target.roll * 180) / Math.PI));
         }
         return;
@@ -454,11 +482,12 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
         quaternion: [q.x, q.y, q.z, q.w],
         roll,
         size,
+        stretch: [stretch[0], stretch[1]],
       };
       setPlacements((prev) => [...prev, placement]);
       setSelectedId(placement.id);
     },
-    [mode, picked, placements, rollDeg, size, say],
+    [mode, picked, placements, rollDeg, size, stretch, say],
   );
 
   const handleSurfacePointerDown = useCallback(
@@ -513,21 +542,44 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
       if (!current) return;
 
       const rect = element.getBoundingClientRect();
-      const center = new THREE.Vector3(...current.position).project(camera);
-      const centerX = rect.left + ((center.x + 1) / 2) * rect.width;
-      const centerY = rect.top + ((1 - center.y) / 2) * rect.height;
-      const dx = event.clientX - centerX;
-      const dy = event.clientY - centerY;
+      const toScreen = (point: THREE.Vector3) => {
+        const projected = point.clone().project(camera);
+        return {
+          x: rect.left + ((projected.x + 1) / 2) * rect.width,
+          y: rect.top + ((1 - projected.y) / 2) * rect.height,
+        };
+      };
+
+      const center = toScreen(new THREE.Vector3(...current.position));
+      const dx = event.clientX - center.x;
+      const dy = event.clientY - center.y;
+
+      // 손잡이가 한가운데에서 어느 쪽으로 뻗어 있는지. 가로·세로만 늘릴 때는
+      // 손가락이 그 방향으로 얼마나 갔는지만 재야 옆으로 흔들려도 안 튄다.
+      const spot = new THREE.Vector3();
+      event.object.getWorldPosition(spot);
+      const handleAt = toScreen(spot);
+      const reachX = handleAt.x - center.x;
+      const reachY = handleAt.y - center.y;
+      const reach = Math.hypot(reachX, reachY) || 1;
+      const axisX = reachX / reach;
+      const axisY = reachY / reach;
+
+      const along = dx * axisX + dy * axisY;
+      const stretching = kind === "stretchX" || kind === "stretchY";
 
       handleDrag.current = {
         kind,
-        centerX,
-        centerY,
+        centerX: center.x,
+        centerY: center.y,
+        axisX,
+        axisY,
         // 손잡이를 한가운데 가까이에서 잡아도 갑자기 커지지 않게 바닥을 둔다
-        startDistance: Math.max(12, Math.hypot(dx, dy)),
+        startDistance: Math.max(12, stretching ? along : Math.hypot(dx, dy)),
         startAngle: Math.atan2(dy, dx),
         startSize: current.size,
         startRoll: (current.roll * 180) / Math.PI,
+        startStretch: current.stretch ?? [1, 1],
       };
       setControlsEnabled(false);
     },
@@ -540,15 +592,22 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
       if (!drag) return;
       const dx = event.clientX - drag.centerX;
       const dy = event.clientY - drag.centerY;
+
       if (drag.kind === "resize") {
         applySize(drag.startSize * (Math.hypot(dx, dy) / drag.startDistance));
+        return;
+      }
+      if (drag.kind === "stretchX" || drag.kind === "stretchY") {
+        const axis = drag.kind === "stretchX" ? 0 : 1;
+        const along = dx * drag.axisX + dy * drag.axisY;
+        applyStretch(axis, drag.startStretch[axis] * (along / drag.startDistance));
         return;
       }
       // 화면 좌표는 아래가 +y라서 부호를 뒤집어야 손가락 방향과 같아진다
       const angle = Math.atan2(dy, dx);
       applyRoll(drag.startRoll - ((angle - drag.startAngle) * 180) / Math.PI);
     },
-    [applySize, applyRoll],
+    [applySize, applyRoll, applyStretch],
   );
 
   const handleDecoPointerDown = useCallback(
@@ -694,6 +753,8 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
                     onClick={() => {
                       setPickedId(on ? null : material.id);
                       setMode("put");
+                      // 앞 재료를 늘린 비율이 다음 재료에 딸려가면 안 된다
+                      setStretch([1, 1]);
                     }}
                     className={`w-full rounded-lg border p-1.5 text-center ${
                       on ? "border-brand bg-brand/15" : "border-transparent bg-[#182D3C]"
@@ -891,7 +952,7 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
           {mode === "remove"
             ? "떼어낼 부자재를 톡 누르세요"
             : selected
-              ? "오른쪽 아래 점을 끌면 크기 · 위쪽 흰 점을 끌면 기울기 · 가운데를 끌면 위치"
+              ? "청록 점 = 크기 · 노란 점 = 가로만·세로만 늘리기 · 흰 점 = 기울기 · 가운데 = 위치"
               : "빈 곳을 끌면 돌아가고, 휠을 굴리면 확대돼요"}
         </p>
       </div>
@@ -945,6 +1006,30 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
             <Tap label="꽉" onClick={() => applySize(SIZE_MAX)} />
             <Tap label="처음" onClick={() => applySize(1)} />
           </div>
+        </Section>
+
+        <Section
+          title="가로만 · 세로만"
+          note={`${Math.round(stretch[0] * 100)}% · ${Math.round(stretch[1] * 100)}%`}
+        >
+          <div className="flex gap-2">
+            <Tap label="가로 －" onClick={() => applyStretch(0, stretch[0] * 0.82)} />
+            <Tap label="가로 ＋" onClick={() => applyStretch(0, stretch[0] * 1.22)} />
+          </div>
+          <div className="mt-2 flex gap-2">
+            <Tap label="세로 －" onClick={() => applyStretch(1, stretch[1] * 0.82)} />
+            <Tap label="세로 ＋" onClick={() => applyStretch(1, stretch[1] * 1.22)} />
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              applyStretch(0, 1);
+              applyStretch(1, 1);
+            }}
+            className="mt-2 w-full rounded-lg border border-[#23404F] bg-[#182D3C] py-2 text-xs text-slate-200 active:bg-brand/20"
+          >
+            원래 비율로
+          </button>
         </Section>
 
         <Section title="기울기" note={`${rollDeg}°`}>

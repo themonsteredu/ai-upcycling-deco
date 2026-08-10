@@ -38,6 +38,11 @@ export type Placement = {
   roll: number;
   /** 기본 크기 대비 배율 */
   size: number;
+  /**
+   * 가로·세로를 따로 늘린 정도. [가로, 세로]
+   * 천 조각을 길쭉하게 늘여 붙일 때 쓴다. 없으면 [1, 1]로 본다.
+   */
+  stretch?: [number, number];
 };
 
 /** 학생이 작업하던 내용 (뒤로 갔다 와도 살아남아야 한다) */
@@ -60,6 +65,9 @@ export const SIZE_MIN = 0.45;
  * 키링 세로가 2.1이므로 긴 변이 3.1까지 늘어나면 가로로도 다 덮인다.
  */
 export const SIZE_MAX = 5.0;
+/** 가로·세로를 따로 늘릴 수 있는 범위 */
+export const STRETCH_MIN = 0.25;
+export const STRETCH_MAX = 4.0;
 /** 크기 배율 1일 때 부자재의 긴 변 길이 (키링 세로가 2.1) */
 export const DECO_UNIT = 0.62;
 /** 표면에서 살짝 띄워 겹쳐 깜빡이는 것을 막는다 */
