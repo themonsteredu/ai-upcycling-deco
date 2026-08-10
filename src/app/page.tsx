@@ -41,6 +41,12 @@ export default function Home() {
         >
           재료 다듬기
         </Link>
+        <Link
+          href="/teacher/setup"
+          className="text-xs font-light text-slate-400 underline underline-offset-4"
+        >
+          연결 점검
+        </Link>
       </div>
     </main>
   );
