@@ -15,6 +15,15 @@ const GRID_MAX = 180;
 /** 이 알파값 위를 "물건이 있는 곳"으로 본다 */
 const ALPHA_CUT = 128;
 /**
+ * 격자를 만들 때만 쓰는 훨씬 느슨한 기준.
+ *
+ * 모양을 읽을 때 사진을 격자로 줄이므로, 가장자리 한두 칸은 흐릿해져
+ * ALPHA_CUT 아래로 떨어진다. 그 칸을 버리면 실제 사진에는 아직 물건이 있는데
+ * 격자가 먼저 끊겨 테두리가 계단처럼 보인다.
+ * 그래서 격자는 넉넉히 만들어 두고, 실제 잘라내기는 원본 사진의 투명도에 맡긴다.
+ */
+const ALPHA_KEEP = 4;
+/**
  * 가장 두꺼운 지점까지의 몇 %만 들어가면 최대 두께에 도달할지.
  * 낮을수록 넓고 평평하게 부풀고, 가장자리에서 급히 얇아진다.
  */
@@ -200,12 +209,12 @@ export async function createPillowFromImage(url: string): Promise<PillowShape> {
         const b = a + 1;
         const c = a + width;
         const d = c + 1;
-        // 네 귀퉁이가 모두 투명한 칸은 아예 만들지 않는다
+        // 네 귀퉁이가 모두 완전히 투명한 칸만 버린다
         if (
-          alpha[a] <= ALPHA_CUT &&
-          alpha[b] <= ALPHA_CUT &&
-          alpha[c] <= ALPHA_CUT &&
-          alpha[d] <= ALPHA_CUT
+          alpha[a] <= ALPHA_KEEP &&
+          alpha[b] <= ALPHA_KEEP &&
+          alpha[c] <= ALPHA_KEEP &&
+          alpha[d] <= ALPHA_KEEP
         ) {
           continue;
         }
