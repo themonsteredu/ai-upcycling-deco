@@ -24,6 +24,8 @@ export type AutoTrimResult = {
   aspect: number;
   /** 배경을 실제로 지웠는지 (이미 투명한 사진이면 false) */
   removedBackground: boolean;
+  /** 다듬고 남은 부분이 원래 사진에서 차지하던 비율 (0~1) */
+  survivedRatio: number;
 };
 
 function cornerAverage(data: Uint8ClampedArray, width: number, height: number) {
@@ -108,19 +110,31 @@ export function autoTrimImage(
   image: HTMLImageElement,
   punchHoles = false,
 ): AutoTrimResult | null {
-  const scale = Math.min(
-    1,
-    MAX_PX / Math.max(image.naturalWidth, image.naturalHeight),
+  return autoTrimSource(
+    image,
+    image.naturalWidth,
+    image.naturalHeight,
+    punchHoles,
   );
-  const width = Math.max(1, Math.round(image.naturalWidth * scale));
-  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+}
+
+/** 사진뿐 아니라 잘라낸 조각(캔버스)도 다듬을 수 있게 한 것 */
+export function autoTrimSource(
+  input: CanvasImageSource,
+  sourceWidth: number,
+  sourceHeight: number,
+  punchHoles = false,
+): AutoTrimResult | null {
+  const scale = Math.min(1, MAX_PX / Math.max(sourceWidth, sourceHeight));
+  const width = Math.max(1, Math.round(sourceWidth * scale));
+  const height = Math.max(1, Math.round(sourceHeight * scale));
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) return null;
-  context.drawImage(image, 0, 0, width, height);
+  context.drawImage(input, 0, 0, width, height);
 
   const source = context.getImageData(0, 0, width, height);
   const corner = cornerAverage(source.data, width, height);
@@ -185,9 +199,18 @@ export function autoTrimImage(
     output.height,
   );
 
+  // 남은 부분이 얼마나 되는지 재 둔다.
+  // 재료 색이 배경과 너무 비슷해 통째로 지워졌는지 판단하는 데 쓴다.
+  const trimmed = context.getImageData(0, 0, width, height);
+  let opaque = 0;
+  for (let i = 3; i < trimmed.data.length; i += 4) {
+    if (trimmed.data[i] > 128) opaque++;
+  }
+
   return {
     dataUrl: output.toDataURL("image/png"),
     aspect: output.width / output.height,
     removedBackground,
+    survivedRatio: opaque / (width * height),
   };
 }
