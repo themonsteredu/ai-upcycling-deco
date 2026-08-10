@@ -41,11 +41,8 @@ export default function WorkshopPage() {
     .sort()
     .map((file) => ({
       id: `folder-${file}`,
-      kind: "image" as const,
       name: file.replace(IMAGE_PATTERN, "").replace(/[-_]/g, " "),
       imageUrl: `/materials/${file}`,
-      // 비율은 브라우저에서 사진을 읽어 알아낸다
-      aspect: undefined as unknown as number,
       baseScale: 1,
       category: guessCategory(file),
     }));

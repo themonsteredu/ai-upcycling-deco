@@ -82,6 +82,21 @@ export function KeyringBase({
           side={THREE.DoubleSide}
         />
       </mesh>
+
+      {/*
+        속살 한 겹.
+        겉감은 앞뒤 두 장이라 옆에서 보면 솔기 틈으로 속이 들여다보인다.
+        같은 모양을 조금 작게 한 겹 더 두어 안이 꽉 차 보이게 한다.
+        솜을 넣은 실제 키링과도 맞는 구조다.
+      */}
+      <mesh geometry={shape.geometry} scale={[0.985, 0.985, 0.86]} raycast={() => null}>
+        <meshStandardMaterial
+          color={shape.fabricColor}
+          roughness={1}
+          metalness={0}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
     </group>
   );
 }

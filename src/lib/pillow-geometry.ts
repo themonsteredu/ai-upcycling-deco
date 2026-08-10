@@ -39,6 +39,8 @@ export type PillowShape = {
   geometry: THREE.BufferGeometry;
   /** 사진에 찍힌 것 전체가 차지하는 범위 (쿠션 몸통 가운데가 0) */
   extent: { minX: number; maxX: number; minY: number; maxY: number };
+  /** 천의 평균 색. 키링 속을 채우는 데 쓴다 */
+  fabricColor: string;
 };
 
 /** 사진을 격자로 줄여서 알파(투명도)만 뽑아낸다 */
@@ -63,7 +65,33 @@ async function readAlphaGrid(url: string) {
   const { data } = context.getImageData(0, 0, width, height);
   const alpha = new Uint8Array(width * height);
   for (let i = 0; i < alpha.length; i++) alpha[i] = data[i * 4 + 3];
-  return { alpha, width, height };
+  return { alpha, rgb: data, width, height };
+}
+
+/** 천의 평균 색을 구한다. 속을 채울 때 겉감과 비슷한 색이어야 자연스럽다 */
+function averageFabricColor(
+  rgb: Uint8ClampedArray,
+  alpha: Uint8Array,
+  distance: Float32Array,
+  deepest: number,
+) {
+  // 가장자리 그림자에 휘둘리지 않도록 충분히 안쪽만 센다
+  const minDepth = deepest * 0.3;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let count = 0;
+  for (let i = 0; i < alpha.length; i++) {
+    if (alpha[i] < 250 || distance[i] < minDepth) continue;
+    r += rgb[i * 4];
+    g += rgb[i * 4 + 1];
+    b += rgb[i * 4 + 2];
+    count++;
+  }
+  if (count === 0) return "#3a4a5e";
+  // 속은 빛이 덜 드니 조금 어둡게
+  const dim = (value: number) => Math.round((value / count) * 0.72);
+  return `rgb(${dim(r)}, ${dim(g)}, ${dim(b)})`;
 }
 
 /** 각 지점이 실루엣 가장자리에서 얼마나 안쪽에 있는지 잰다 */
@@ -129,7 +157,7 @@ function denseSpan(counts: Int32Array) {
  * 재질 그룹 0 = 앞면, 그룹 1 = 뒷면.
  */
 export async function createPillowFromImage(url: string): Promise<PillowShape> {
-  const { alpha, width, height } = await readAlphaGrid(url);
+  const { alpha, rgb, width, height } = await readAlphaGrid(url);
   const distance = distanceToEdge(alpha, width, height);
 
   const columns = new Int32Array(width);
@@ -253,6 +281,7 @@ export async function createPillowFromImage(url: string): Promise<PillowShape> {
 
   return {
     geometry,
+    fabricColor: averageFabricColor(rgb, alpha, distance, deepest),
     extent: {
       minX: (minX - centerX) * unit,
       maxX: (maxX - centerX) * unit,

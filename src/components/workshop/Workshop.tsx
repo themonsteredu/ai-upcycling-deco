@@ -16,8 +16,6 @@ import { KeyringBase } from "./KeyringBase";
 import { Deco } from "./Deco";
 import {
   BASE_LABEL,
-  BUILTIN_MATERIALS,
-  DECO_COLORS,
   DRAFT_STORAGE_KEY,
   SIZE_MAX,
   SIZE_MIN,
@@ -122,7 +120,6 @@ export function Workshop({ materials, availableBases }: Props) {
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pickedId, setPickedId] = useState<string | null>(null);
-  const [color, setColor] = useState(DECO_COLORS[0]);
   const [size, setSizeState] = useState(1);
   const [rollDeg, setRollDeg] = useState(0);
   const [mode, setMode] = useState<"put" | "remove">("put");
@@ -153,7 +150,7 @@ export function Workshop({ materials, availableBases }: Props) {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const allMaterials = useMemo(
-    () => [...BUILTIN_MATERIALS, ...materials, ...addedMaterials],
+    () => [...materials, ...addedMaterials],
     [materials, addedMaterials],
   );
   const materialById = useMemo(
@@ -263,14 +260,6 @@ export function Workshop({ materials, availableBases }: Props) {
     [updateSelected],
   );
 
-  const applyColor = useCallback(
-    (value: string) => {
-      setColor(value);
-      if (selectedIdRef.current) updateSelected((p) => ({ ...p, color: value }));
-    },
-    [updateSelected],
-  );
-
   const undo = useCallback(() => {
     if (placements.length === 0) {
       say("되돌릴 것이 없어요");
@@ -324,7 +313,6 @@ export function Workshop({ materials, availableBases }: Props) {
         if (target) {
           setSizeState(target.size);
           setRollDeg(Math.round((target.roll * 180) / Math.PI));
-          if (target.color) setColor(target.color);
         }
         return;
       }
@@ -346,12 +334,11 @@ export function Workshop({ materials, availableBases }: Props) {
         quaternion: [q.x, q.y, q.z, q.w],
         roll,
         size,
-        ...(picked.kind === "shape" ? { color } : {}),
       };
       setPlacements((prev) => [...prev, placement]);
       setSelectedId(placement.id);
     },
-    [mode, picked, placements, rollDeg, size, color, say],
+    [mode, picked, placements, rollDeg, size, say],
   );
 
   const handleSurfacePointerDown = useCallback(
@@ -473,7 +460,6 @@ export function Workshop({ materials, availableBases }: Props) {
             if (!shrunk) return null;
             const material: Material = {
               id: `added-${crypto.randomUUID()}`,
-              kind: "image",
               name: file.name.replace(/\.[^.]+$/, "").slice(0, 10),
               imageUrl: shrunk.dataUrl,
               aspect: shrunk.aspect,
@@ -582,6 +568,14 @@ export function Workshop({ materials, availableBases }: Props) {
             </button>
           </div>
 
+          {allMaterials.length === 0 && (
+            <p className="px-4 py-6 text-center text-[11.5px] leading-relaxed text-slate-400">
+              재료함이 비었어요.
+              <br />
+              위 <b className="text-brand">+ 재료 넣기</b>로 부자재 사진을 넣어 주세요.
+            </p>
+          )}
+
           <div className="grid grid-cols-4 gap-2 px-3 lg:grid-cols-3">
             {allMaterials.map((material) => {
               const on = pickedId === material.id;
@@ -598,16 +592,12 @@ export function Workshop({ materials, availableBases }: Props) {
                       on ? "border-brand bg-brand/15" : "border-transparent bg-[#182D3C]"
                     }`}
                   >
-                    {material.kind === "shape" ? (
-                      <span className="block text-xl leading-6">{material.emoji}</span>
-                    ) : (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={material.imageUrl}
-                        alt=""
-                        className="mx-auto h-7 w-7 rounded bg-white/10 object-contain"
-                      />
-                    )}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={material.imageUrl}
+                      alt=""
+                      className="mx-auto h-8 w-8 rounded bg-white/10 object-contain"
+                    />
                     <span className="mt-1 block truncate text-[9.5px] text-slate-300">
                       {material.name}
                     </span>
@@ -794,25 +784,6 @@ export function Workshop({ materials, availableBases }: Props) {
               >
                 {label}
               </button>
-            ))}
-          </div>
-        </Section>
-
-        <Section title="색깔" note="(기본 도형만)">
-          <div className="grid grid-cols-5 gap-1.5">
-            {DECO_COLORS.map((value) => (
-              <button
-                key={value}
-                type="button"
-                aria-label={`색 ${value}`}
-                onClick={() => applyColor(value)}
-                style={{ background: value }}
-                className={`aspect-square rounded-md border-2 ${
-                  color === value
-                    ? "border-white ring-2 ring-brand"
-                    : "border-transparent"
-                }`}
-              />
             ))}
           </div>
         </Section>
