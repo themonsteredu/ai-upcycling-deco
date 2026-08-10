@@ -44,10 +44,6 @@ export type Placement = {
 export type WorkshopDraft = {
   baseType: BaseType;
   placements: Placement[];
-  /** 선생님이 넣은 부자재 사진. 새로고침해도 남아야 한다 */
-  addedMaterials: Material[];
-  /** 넣어 둔 고리 사진들 */
-  hookMaterials: Material[];
   /** 지금 걸어 둔 고리. 없으면 null */
   hookId: string | null;
   /** 고리를 돌린 각도 (도) */

@@ -28,12 +28,18 @@ export default function Home() {
         재료를 고르고 키링 위를 눌러 붙여 보세요
       </p>
 
-      <div className="mt-auto pt-14 text-center">
+      <div className="mt-auto flex justify-center gap-5 pt-14">
+        <Link
+          href="/teacher/materials"
+          className="text-xs font-light text-slate-400 underline underline-offset-4"
+        >
+          선생님용 — 재료함 관리
+        </Link>
         <Link
           href="/teacher/trim"
           className="text-xs font-light text-slate-400 underline underline-offset-4"
         >
-          선생님용 — 재료 다듬기
+          재료 다듬기
         </Link>
       </div>
     </main>

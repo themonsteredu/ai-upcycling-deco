@@ -69,49 +69,12 @@ function readDraft(availableBases: BaseType[]): WorkshopDraft | null {
         ? draft.baseType
         : (availableBases[0] ?? "denim"),
       placements: Array.isArray(draft?.placements) ? draft.placements : [],
-      addedMaterials: Array.isArray(draft?.addedMaterials)
-        ? draft.addedMaterials
-        : [],
-      hookMaterials: Array.isArray(draft?.hookMaterials)
-        ? draft.hookMaterials
-        : [],
       hookId: draft?.hookId ?? null,
       hookAngle: draft?.hookAngle ?? 0,
     };
   } catch {
     return null;
   }
-}
-
-/**
- * 넣은 사진의 배경을 자동으로 지우고 딱 맞게 잘라, 브라우저에 담을 수 있는
- * 크기로 만든다. 자동으로 안 되면 원본을 그대로 쓴다.
- */
-function prepareUpload(file: File, punchHoles = false) {
-  return new Promise<{ dataUrl: string; aspect: number; trimmed: boolean } | null>(
-    (resolve) => {
-      const objectUrl = URL.createObjectURL(file);
-      const image = new Image();
-      image.onload = () => {
-        const result = autoTrimImage(image, punchHoles);
-        URL.revokeObjectURL(objectUrl);
-        if (!result) {
-          resolve(null);
-          return;
-        }
-        resolve({
-          dataUrl: result.dataUrl,
-          aspect: result.aspect,
-          trimmed: result.removedBackground,
-        });
-      };
-      image.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        resolve(null);
-      };
-      image.src = objectUrl;
-    },
-  );
 }
 
 /**
@@ -143,12 +106,6 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
   const [placements, setPlacements] = useState<Placement[]>(
     initialDraft?.placements ?? [],
   );
-  const [addedMaterials, setAddedMaterials] = useState<Material[]>(
-    initialDraft?.addedMaterials ?? [],
-  );
-  const [hookMaterials, setHookMaterials] = useState<Material[]>(
-    initialDraft?.hookMaterials ?? [],
-  );
   const [hookId, setHookId] = useState<string | null>(
     initialDraft?.hookId ?? null,
   );
@@ -168,9 +125,6 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
   const [toast, setToast] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const setFileRef = useRef<HTMLInputElement>(null);
-  const hookFileRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pointerStart = useRef<{ x: number; y: number } | null>(null);
   const pendingTap = useRef<PendingTap>({ kind: "empty" });
@@ -243,8 +197,8 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
   }, [hooks]);
 
   const allMaterials = useMemo(
-    () => [...savedMaterials, ...folderMaterials, ...addedMaterials],
-    [savedMaterials, folderMaterials, addedMaterials],
+    () => [...savedMaterials, ...folderMaterials],
+    [savedMaterials, folderMaterials],
   );
   const materialById = useMemo(
     () => new Map(allMaterials.map((m) => [m.id, m])),
@@ -252,8 +206,8 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
   );
   const picked = pickedId ? materialById.get(pickedId) : undefined;
   const allHooks = useMemo(
-    () => [...savedHooks, ...folderHooks, ...hookMaterials],
-    [savedHooks, folderHooks, hookMaterials],
+    () => [...savedHooks, ...folderHooks],
+    [savedHooks, folderHooks],
   );
   const hookMaterial = allHooks.find((m) => m.id === hookId) ?? null;
   const selected = placements.find((p) => p.id === selectedId) ?? null;
@@ -275,8 +229,6 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
     const draft: WorkshopDraft = {
       baseType,
       placements,
-      addedMaterials,
-      hookMaterials,
       hookId,
       hookAngle,
     };
@@ -285,7 +237,7 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
     } catch {
       // 저장 공간이 부족해도 작업은 계속되어야 한다
     }
-  }, [baseType, placements, addedMaterials, hookMaterials, hookId, hookAngle]);
+  }, [baseType, placements, hookId, hookAngle]);
 
   /* ---------- 화면에 꽉 차게 맞추기 ---------- */
 
@@ -579,106 +531,6 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
 
   /* ---------- 재료 넣기 · 세트 저장 ---------- */
 
-  const addFiles = useCallback(
-    async (files: FileList | null) => {
-      if (!files || files.length === 0) return;
-      const loaded = await Promise.all(
-        Array.from(files)
-          .filter((file) => file.type.startsWith("image/"))
-          .map(async (file) => {
-            const prepared = await prepareUpload(file);
-            if (!prepared) return null;
-            const material: Material = {
-              id: `added-${crypto.randomUUID()}`,
-              name: file.name.replace(/\.[^.]+$/, "").slice(0, 10),
-              imageUrl: prepared.dataUrl,
-              aspect: prepared.aspect,
-              category: "기타",
-              baseScale: 1,
-            };
-            return { material, trimmed: prepared.trimmed };
-          }),
-      );
-      const ok = loaded.filter((item) => item !== null);
-      if (ok.length === 0) {
-        say("사진을 읽지 못했어요");
-        return;
-      }
-      setAddedMaterials((prev) => [...prev, ...ok.map((item) => item.material)]);
-      const trimmedCount = ok.filter((item) => item.trimmed).length;
-      say(
-        trimmedCount > 0
-          ? `${ok.length}개 넣었어요 · 배경 ${trimmedCount}개 지움`
-          : `${ok.length}개 재료를 넣었어요`,
-      );
-    },
-    [say],
-  );
-
-  const addHookFiles = useCallback(
-    async (files: FileList | null) => {
-      if (!files || files.length === 0) return;
-      const loaded = await Promise.all(
-        Array.from(files)
-          .filter((file) => file.type.startsWith("image/"))
-          .map(async (file) => {
-            // 고리는 가운데가 뚫려 있어야 하므로 안쪽 배경까지 지운다
-            const prepared = await prepareUpload(file, true);
-            if (!prepared) return null;
-            const material: Material = {
-              id: `hook-${crypto.randomUUID()}`,
-              name: file.name.replace(/\.[^.]+$/, "").slice(0, 10),
-              imageUrl: prepared.dataUrl,
-              aspect: prepared.aspect,
-              category: "기타",
-              baseScale: 1,
-            };
-            return material;
-          }),
-      );
-      const added: Material[] = loaded.filter((m) => m !== null);
-      if (added.length === 0) {
-        say("사진을 읽지 못했어요");
-        return;
-      }
-      setHookMaterials((prev) => [...prev, ...added]);
-      setHookId(added[0].id);
-      say(`고리 ${added.length}개를 넣었어요`);
-    },
-    [say],
-  );
-
-  const exportSet = useCallback(() => {
-    const blob = new Blob([JSON.stringify(addedMaterials, null, 1)], {
-      type: "application/json",
-    });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "재료세트.json";
-    link.click();
-    URL.revokeObjectURL(link.href);
-    say("재료 세트를 저장했어요");
-  }, [addedMaterials, say]);
-
-  const importSet = useCallback(
-    (file: File | undefined) => {
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const parsed = JSON.parse(String(reader.result)) as Material[];
-          if (!Array.isArray(parsed)) throw new Error("형식이 맞지 않습니다");
-          setAddedMaterials(parsed);
-          say("재료 세트를 불러왔어요");
-        } catch {
-          say("세트 파일을 읽을 수 없어요");
-        }
-      };
-      reader.readAsText(file);
-    },
-    [say],
-  );
-
   const saveImage = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -728,29 +580,21 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
             ))}
           </div>
 
-          <div className="flex items-center justify-between px-4 pt-4 pb-2">
-            <span className="text-[11px] tracking-wider text-slate-400">재료함</span>
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="rounded-md border border-[#23404F] bg-[#182D3C] px-2 py-1 text-[11px] text-brand"
-            >
-              + 재료 넣기
-            </button>
-          </div>
+          <p className="px-4 pt-4 pb-2 text-[11px] font-light tracking-wider text-slate-400">
+            재료함
+          </p>
 
           {allMaterials.length === 0 && (
             <p className="px-4 py-6 text-center text-[11.5px] leading-relaxed text-slate-400">
               재료함이 비었어요.
               <br />
-              위 <b className="text-brand">+ 재료 넣기</b>로 부자재 사진을 넣어 주세요.
+              선생님이 재료를 넣어 주실 때까지 기다려 주세요.
             </p>
           )}
 
           <div className="flex gap-2 overflow-x-auto px-3 lg:grid lg:grid-cols-3 lg:overflow-x-visible">
             {allMaterials.map((material) => {
               const on = pickedId === material.id;
-              const removable = material.id.startsWith("added-");
               return (
                 <div key={material.id} className="relative w-[4.5rem] shrink-0 lg:w-auto">
                   <button
@@ -773,38 +617,15 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
                       {material.name}
                     </span>
                   </button>
-                  {removable && (
-                    <button
-                      type="button"
-                      aria-label={`${material.name} 재료 빼기`}
-                      onClick={() => {
-                        setAddedMaterials((prev) =>
-                          prev.filter((m) => m.id !== material.id),
-                        );
-                        if (pickedId === material.id) setPickedId(null);
-                      }}
-                      className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-black/70 text-[10px] text-rose-300"
-                    >
-                      ×
-                    </button>
-                  )}
+
                 </div>
               );
             })}
           </div>
 
-          <div className="flex items-center justify-between px-4 pt-4 pb-2">
-            <span className="text-[11px] font-light tracking-wider text-slate-400">
-              고리
-            </span>
-            <button
-              type="button"
-              onClick={() => hookFileRef.current?.click()}
-              className="rounded-md border border-[#23404F] bg-[#182D3C] px-2 py-1 text-[11px] text-brand"
-            >
-              + 고리 넣기
-            </button>
-          </div>
+          <p className="px-4 pt-4 pb-2 text-[11px] font-light tracking-wider text-slate-400">
+            고리
+          </p>
 
           <div className="flex gap-2 overflow-x-auto px-3">
             <button
@@ -839,21 +660,7 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
                     {material.name}
                   </span>
                 </button>
-                {material.id.startsWith("hook-") && (
-                  <button
-                    type="button"
-                    aria-label={`${material.name} 고리 빼기`}
-                    onClick={() => {
-                      setHookMaterials((prev) =>
-                        prev.filter((m) => m.id !== material.id),
-                      );
-                      if (hookId === material.id) setHookId(null);
-                    }}
-                    className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-black/70 text-[10px] text-rose-300"
-                  >
-                    ×
-                  </button>
-                )}
+
               </div>
             ))}
           </div>
@@ -889,57 +696,8 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
             </div>
           )}
 
-          <div className="hidden gap-2 p-3 lg:flex">
-            <button
-              type="button"
-              onClick={exportSet}
-              disabled={addedMaterials.length === 0}
-              className="flex-1 rounded-lg border border-[#23404F] bg-[#182D3C] py-2 text-[11px] text-slate-300 disabled:opacity-40"
-            >
-              세트 저장
-            </button>
-            <button
-              type="button"
-              onClick={() => setFileRef.current?.click()}
-              className="flex-1 rounded-lg border border-[#23404F] bg-[#182D3C] py-2 text-[11px] text-slate-300"
-            >
-              세트 불러오기
-            </button>
-          </div>
+          <div className="h-3" />
         </div>
-
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          multiple
-          hidden
-          onChange={(event) => {
-            void addFiles(event.target.files);
-            event.target.value = "";
-          }}
-        />
-        <input
-          ref={hookFileRef}
-          type="file"
-          accept="image/*"
-          multiple
-          hidden
-          onChange={(event) => {
-            void addHookFiles(event.target.files);
-            event.target.value = "";
-          }}
-        />
-        <input
-          ref={setFileRef}
-          type="file"
-          accept="application/json,.json"
-          hidden
-          onChange={(event) => {
-            importSet(event.target.files?.[0]);
-            event.target.value = "";
-          }}
-        />
       </aside>
 
       {/* 가운데 — 3D 무대 */}
