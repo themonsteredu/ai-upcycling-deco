@@ -526,7 +526,7 @@ export function Workshop({ materials, availableBases }: Props) {
   return (
     <div className="flex h-dvh flex-col bg-[#0B1620] text-[#DCE9EF] lg:flex-row">
       {/* 왼쪽 — 원단과 재료함 */}
-      <aside className="order-2 flex shrink-0 flex-col border-t border-[#23404F] bg-[#12222E] lg:order-1 lg:w-60 lg:border-t-0 lg:border-r">
+      <aside className="order-2 flex max-h-[24dvh] shrink-0 flex-col border-t border-[#23404F] bg-[#12222E] lg:order-1 lg:max-h-none lg:w-60 lg:border-t-0 lg:border-r">
         <div className="hidden border-b border-[#23404F] px-4 py-4 lg:block">
           <p className="text-[15px] font-bold tracking-tight text-white">
             업사이클 키링 <span className="text-brand">디자인</span>
@@ -537,7 +537,7 @@ export function Workshop({ materials, availableBases }: Props) {
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <p className="px-4 pt-3 pb-2 text-[11px] tracking-wider text-slate-400">
+          <p className="px-4 pt-3 pb-2 text-[11px] font-light tracking-wider text-slate-400">
             원단 고르기
           </p>
           <div className="flex gap-2 px-3">
@@ -576,12 +576,12 @@ export function Workshop({ materials, availableBases }: Props) {
             </p>
           )}
 
-          <div className="grid grid-cols-4 gap-2 px-3 lg:grid-cols-3">
+          <div className="flex gap-2 overflow-x-auto px-3 lg:grid lg:grid-cols-3 lg:overflow-x-visible">
             {allMaterials.map((material) => {
               const on = pickedId === material.id;
               const removable = material.id.startsWith("added-");
               return (
-                <div key={material.id} className="relative">
+                <div key={material.id} className="relative w-[4.5rem] shrink-0 lg:w-auto">
                   <button
                     type="button"
                     onClick={() => {
@@ -622,7 +622,7 @@ export function Workshop({ materials, availableBases }: Props) {
             })}
           </div>
 
-          <div className="flex gap-2 p-3">
+          <div className="hidden gap-2 p-3 lg:flex">
             <button
               type="button"
               onClick={exportSet}
@@ -665,8 +665,8 @@ export function Workshop({ materials, availableBases }: Props) {
       </aside>
 
       {/* 가운데 — 3D 무대 */}
-      <div className="relative order-1 min-h-0 flex-1 lg:order-2">
-        <div className="pointer-events-none absolute top-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-[#23404F] bg-[#12222E]/90 px-4 py-2 text-xs whitespace-nowrap">
+      <div className="relative order-1 min-h-[40dvh] flex-1 lg:order-2 lg:min-h-0">
+        <div className="pointer-events-none absolute top-3 left-1/2 z-10 hidden -translate-x-1/2 rounded-full border border-[#23404F] bg-[#12222E]/90 px-4 py-2 text-xs whitespace-nowrap sm:block">
           <span className={stepClass(1)}>① 재료 고르기</span>
           <span className="mx-2 text-[#33566a]">→</span>
           <span className={stepClass(2)}>② 키링 위를 클릭</span>
@@ -747,7 +747,7 @@ export function Workshop({ materials, availableBases }: Props) {
       </div>
 
       {/* 오른쪽 — 조절판 */}
-      <aside className="order-3 flex shrink-0 flex-col overflow-y-auto border-t border-[#23404F] bg-[#12222E] lg:w-56 lg:border-t-0 lg:border-l">
+      <aside className="order-3 flex max-h-[32dvh] shrink-0 flex-col overflow-y-auto border-t border-[#23404F] bg-[#12222E] lg:max-h-none lg:w-56 lg:border-t-0 lg:border-l">
         <div className="flex border-b border-[#23404F]">
           <div className="flex-1 py-3 text-center">
             <p className="text-2xl leading-none font-bold text-brand">
