@@ -37,8 +37,6 @@ const BODY_THRESHOLD = 0.4;
 
 export type PillowShape = {
   geometry: THREE.BufferGeometry;
-  /** 고리 끈 끝. 금속 링을 걸 자리다. 끈이 없으면 null */
-  strapTip: { x: number; y: number; outward: 1 | -1 } | null;
   /** 사진에 찍힌 것 전체가 차지하는 범위 (쿠션 몸통 가운데가 0) */
   extent: { minX: number; maxX: number; minY: number; maxY: number };
 };
@@ -241,29 +239,6 @@ export async function createPillowFromImage(url: string): Promise<PillowShape> {
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
 
-  // 쿠션 몸통 바깥으로 튀어나온 부분 = 고리 끈. 금속 링을 걸 자리를 찾아둔다.
-  const leftGap = bodyX[0] - minX;
-  const rightGap = maxX - bodyX[1];
-  let strapTip: PillowShape["strapTip"] = null;
-  if (Math.max(leftGap, rightGap) > 2) {
-    const outward: 1 | -1 = rightGap >= leftGap ? 1 : -1;
-    const tipX = outward === 1 ? maxX : minX;
-    let sum = 0;
-    let count = 0;
-    for (let y = 0; y < height; y++) {
-      if (alpha[y * width + tipX] > ALPHA_CUT) {
-        sum += y;
-        count++;
-      }
-    }
-    const tipY = count > 0 ? sum / count : centerY;
-    strapTip = {
-      x: (tipX - centerX) * unit,
-      y: (centerY - tipY) * unit,
-      outward,
-    };
-  }
-
   let silhouetteTop = height;
   let silhouetteBottom = -1;
   for (let y = 0; y < height; y++) {
@@ -277,7 +252,6 @@ export async function createPillowFromImage(url: string): Promise<PillowShape> {
 
   return {
     geometry,
-    strapTip,
     extent: {
       minX: (minX - centerX) * unit,
       maxX: (maxX - centerX) * unit,

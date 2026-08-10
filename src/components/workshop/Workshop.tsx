@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { Canvas, type ThreeEvent } from "@react-three/fiber";
 import { Html, OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import type { PillowShape } from "@/lib/pillow-geometry";
-import { HARDWARE_REACH, KeyringBase } from "./KeyringBase";
+import { KeyringBase } from "./KeyringBase";
 import { Sticker } from "./Sticker";
 import {
   BASE_LABEL,
@@ -137,18 +137,10 @@ export function Workshop({ materials, availableBases }: Props) {
       return;
     }
     const { minX, maxX, minY, maxY } = shape.extent;
-    let left = minX;
-    let right = maxX;
-    if (shape.strapTip) {
-      // 금속 링과 손목줄이 끈 바깥으로 더 뻗는다
-      const reach = shape.strapTip.x + shape.strapTip.outward * HARDWARE_REACH;
-      left = Math.min(left, reach);
-      right = Math.max(right, reach);
-    }
     setFrame({
-      cx: (left + right) / 2,
+      cx: (minX + maxX) / 2,
       cy: (minY + maxY) / 2,
-      width: right - left,
+      width: maxX - minX,
       height: maxY - minY,
     });
   }, []);
