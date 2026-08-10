@@ -15,7 +15,20 @@ type Result = {
   url: string;
   width: number;
   height: number;
+  /** 재료함에 넣은 결과 */
+  sent?: "ok" | "fail";
 };
+
+/** 재료함으로 보내려면 파일 주소가 아니라 사진 자체가 필요하다 */
+async function toDataUrl(url: string) {
+  const blob = await (await fetch(url)).blob();
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("사진을 읽지 못했습니다"));
+    reader.readAsDataURL(blob);
+  });
+}
 
 function baseName(fileName: string) {
   return fileName.replace(/\.[^.]+$/, "");
@@ -62,7 +75,9 @@ export function TrimStudio() {
   const [gridRows, setGridRows] = useState(5);
   const [splitting, setSplitting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
 
   const current = items[index] ?? null;
 
@@ -161,6 +176,64 @@ export function TrimStudio() {
     }
   }, [current, gridColumns, gridRows, index, items, goTo]);
 
+  /** 다듬은 결과를 선생님 재료함으로 그대로 보낸다 */
+  const sendToBox = useCallback(
+    async (targets: number[]) => {
+      if (targets.length === 0) return;
+      setSending(true);
+      setNotice(null);
+      let done = 0;
+      let failure: string | null = null;
+
+      for (const at of targets) {
+        const result = results[at];
+        if (!result || result.sent === "ok") continue;
+        try {
+          const dataUrl = await toDataUrl(result.url);
+          const response = await fetch("/api/teacher/materials", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              dataUrl,
+              kind: "deco",
+              name: result.name.slice(0, 20),
+              category: "천 조각",
+            }),
+          });
+          if (!response.ok) {
+            const json = await response.json().catch(() => ({}));
+            failure =
+              response.status === 401
+                ? "선생님 재료함에 먼저 로그인해 주세요. (처음 화면 → 선생님용 — 재료함 관리)"
+                : (json.error ?? "재료함에 넣지 못했습니다");
+            setResults((prev) =>
+              prev.map((item, index) =>
+                index === at ? { ...item, sent: "fail" } : item,
+              ),
+            );
+            continue;
+          }
+          done++;
+          setResults((prev) =>
+            prev.map((item, index) =>
+              index === at ? { ...item, sent: "ok" } : item,
+            ),
+          );
+        } catch {
+          failure = "재료함에 넣지 못했습니다";
+        }
+      }
+
+      setSending(false);
+      setNotice(
+        failure
+          ? `${done}개를 넣었습니다. ${failure}`
+          : `${done}개를 재료함에 넣었습니다. 학생 화면에 바로 나옵니다.`,
+      );
+    },
+    [results],
+  );
+
   /* ---------- 사진이 아직 없을 때 ---------- */
 
   if (items.length === 0) {
@@ -190,26 +263,66 @@ export function TrimStudio() {
             setDragging(false);
             void addFiles(event.dataTransfer.files);
           }}
-          onClick={() => inputRef.current?.click()}
-          className={`mt-6 cursor-pointer rounded-xl border-2 border-dashed p-12 text-center transition ${
+          className={`mt-6 rounded-xl border-2 border-dashed p-8 text-center transition ${
             dragging ? "border-brand bg-brand-light" : "border-slate-300 bg-white"
           }`}
         >
-          <p className="font-bold">사진을 여기로 끌어다 놓으세요</p>
+          <p className="font-bold">사진 넣기</p>
           <p className="mt-1 text-sm text-slate-500">
-            여러 장을 한 번에 놓으면 한 장씩 차례로 다듬습니다
+            여러 장을 한 번에 넣으면 한 장씩 차례로 다듬습니다
           </p>
+
+          <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className="rounded-xl bg-brand px-8 py-4 text-base font-bold text-white"
+            >
+              앨범에서 고르기
+            </button>
+            <button
+              type="button"
+              onClick={() => cameraRef.current?.click()}
+              className="rounded-xl border border-slate-300 bg-white px-8 py-4 text-base font-bold text-slate-600"
+            >
+              지금 찍기
+            </button>
+          </div>
+
+          <p className="mt-4 text-xs text-slate-400">
+            컴퓨터에서는 사진을 이 칸으로 끌어다 놓아도 됩니다
+          </p>
+
           <input
             ref={inputRef}
             type="file"
             accept="image/*"
             multiple
             hidden
-            onChange={(event) => void addFiles(event.target.files)}
+            onChange={(event) => {
+              void addFiles(event.target.files);
+              event.target.value = "";
+            }}
+          />
+          <input
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            hidden
+            onChange={(event) => {
+              void addFiles(event.target.files);
+              event.target.value = "";
+            }}
           />
         </div>
 
-        <ResultList results={results} notice={notice} />
+        <ResultList
+          results={results}
+          notice={notice}
+          sending={sending}
+          onSend={sendToBox}
+        />
       </div>
     );
   }
@@ -342,7 +455,12 @@ export function TrimStudio() {
         )}
       </div>
 
-      <ResultList results={results} notice={notice} />
+      <ResultList
+        results={results}
+        notice={notice}
+        sending={sending}
+        onSend={sendToBox}
+      />
     </div>
   );
 }
@@ -350,46 +468,89 @@ export function TrimStudio() {
 function ResultList({
   results,
   notice,
+  sending,
+  onSend,
 }: {
   results: Result[];
   notice: string | null;
+  sending: boolean;
+  onSend: (targets: number[]) => Promise<void>;
 }) {
   if (results.length === 0) return null;
+  const waiting = results
+    .map((result, index) => (result.sent === "ok" ? -1 : index))
+    .filter((index) => index >= 0);
+
   return (
     <section className="mt-10 border-t border-slate-200 pt-6">
-      <p className="font-bold">다듬기를 마친 재료 {results.length}개</p>
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="font-bold">다듬기를 마친 재료 {results.length}개</p>
+        <button
+          type="button"
+          disabled={sending || waiting.length === 0}
+          onClick={() => void onSend(waiting)}
+          className="ml-auto rounded-lg bg-brand px-5 py-2.5 text-sm font-bold text-white disabled:opacity-40"
+        >
+          {sending
+            ? "넣는 중…"
+            : waiting.length === 0
+              ? "모두 넣었습니다"
+              : `${waiting.length}개 재료함에 넣기`}
+        </button>
+      </div>
+
       {notice && (
         <p className="mt-3 rounded-lg bg-amber-50 p-4 text-sm leading-relaxed text-amber-800">
           {notice}
         </p>
       )}
       <p className="mt-1 text-sm text-slate-500">
-        아직 저장 기능이 없어서 컴퓨터로 내려받는 것까지만 됩니다. 다음 단계에서
-        재료함에 바로 들어가도록 이어붙일 예정입니다.
+        재료함에 넣으면 모든 학생 화면에 바로 나옵니다. 이름과 분류는 재료함
+        관리 화면에서 고치면 됩니다.
       </p>
+
       <div className="mt-4 flex flex-wrap gap-4">
         {results.map((result, index) => (
-          <a
+          <div
             key={`${result.name}-${index}`}
-            href={result.url}
-            download={`${result.name}.png`}
             className="w-32 rounded-lg border border-slate-200 bg-white p-2 text-center"
-            style={{
-              backgroundImage:
-                "repeating-conic-gradient(#e7ebef 0% 25%, #ffffff 0% 50%)",
-              backgroundSize: "16px 16px",
-            }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={result.url}
-              alt={result.name}
-              className="mx-auto h-24 w-full object-contain"
-            />
-            <span className="mt-1 block truncate rounded bg-white/90 text-xs font-bold text-slate-600">
+            <div
+              style={{
+                backgroundImage:
+                  "repeating-conic-gradient(#e7ebef 0% 25%, #ffffff 0% 50%)",
+                backgroundSize: "16px 16px",
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={result.url}
+                alt={result.name}
+                className="mx-auto h-24 w-full object-contain"
+              />
+            </div>
+            {result.sent === "ok" ? (
+              <span className="mt-1 block text-xs font-bold text-brand-dark">
+                재료함에 넣음
+              </span>
+            ) : (
+              <button
+                type="button"
+                disabled={sending}
+                onClick={() => void onSend([index])}
+                className="mt-1 block w-full text-xs font-bold text-slate-600 disabled:opacity-40"
+              >
+                {result.sent === "fail" ? "다시 넣기" : "재료함에 넣기"}
+              </button>
+            )}
+            <a
+              href={result.url}
+              download={`${result.name}.png`}
+              className="mt-0.5 block text-[11px] text-slate-400 underline"
+            >
               내려받기
-            </span>
-          </a>
+            </a>
+          </div>
         ))}
       </div>
     </section>

@@ -9,14 +9,14 @@ import {
   useState,
 } from "react";
 import * as THREE from "three";
-import { Canvas, type ThreeEvent } from "@react-three/fiber";
+import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import { autoTrimImage } from "@/lib/auto-trim";
 import { getSupabase, type MaterialRow } from "@/lib/supabase";
 import type { PillowShape } from "@/lib/pillow-geometry";
 import { HOOK_HEIGHT } from "./Hook";
 import { KeyringBase } from "./KeyringBase";
-import { Deco } from "./Deco";
+import { Deco, type HandleKind } from "./Deco";
 import {
   BASE_LABEL,
   DRAFT_STORAGE_KEY,
@@ -51,6 +51,31 @@ type PendingTap =
   | { kind: "surface"; point: THREE.Vector3; normal: THREE.Vector3 }
   | { kind: "deco"; id: string }
   | { kind: "empty" };
+
+/** 손잡이를 잡고 끄는 동안 기억해 두는 값 */
+type HandleDrag = {
+  kind: HandleKind;
+  /** 부자재 한가운데의 화면 좌표 */
+  centerX: number;
+  centerY: number;
+  startDistance: number;
+  startAngle: number;
+  startSize: number;
+  startRoll: number;
+};
+
+/** 지금 쓰이는 카메라를 바깥에서 쓸 수 있게 꺼내 둔다 */
+function CameraProbe({
+  cameraRef,
+}: {
+  cameraRef: React.RefObject<THREE.Camera | null>;
+}) {
+  const camera = useThree((state) => state.camera);
+  useEffect(() => {
+    cameraRef.current = camera;
+  }, [camera, cameraRef]);
+  return null;
+}
 
 type Props = {
   materials: Material[];
@@ -120,6 +145,7 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
   const [baseShape, setBaseShape] = useState<{
     extent: PillowShape["extent"];
     strapTip: PillowShape["strapTip"];
+    sampleHeight: PillowShape["sampleHeight"];
   } | null>(null);
   const [viewport, setViewport] = useState({ width: 1280, height: 720 });
   const [toast, setToast] = useState<string | null>(null);
@@ -130,6 +156,8 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
   const pendingTap = useRef<PendingTap>({ kind: "empty" });
   const draggingId = useRef<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
+  const cameraRef = useRef<THREE.Camera | null>(null);
+  const handleDrag = useRef<HandleDrag | null>(null);
   const gesture = useRef<{
     distance: number;
     angle: number;
@@ -243,7 +271,13 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
 
   const handleShapeReady = useCallback((shape: PillowShape | null) => {
     setBaseShape(
-      shape ? { extent: shape.extent, strapTip: shape.strapTip } : null,
+      shape
+        ? {
+            extent: shape.extent,
+            strapTip: shape.strapTip,
+            sampleHeight: shape.sampleHeight,
+          }
+        : null,
     );
   }, []);
 
@@ -372,9 +406,13 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
   const handlePointerUp = useCallback(
     (event: React.PointerEvent) => {
       const start = pointerStart.current;
+      const wasHandle = handleDrag.current !== null;
+      handleDrag.current = null;
       draggingId.current = null;
       setControlsEnabled(true);
       pointerStart.current = null;
+      // 손잡이를 놓은 것이면 붙이거나 고르는 동작으로 넘어가면 안 된다
+      if (wasHandle) return;
       if (!start) return;
       if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > TAP_SLOP_PX)
         return;
@@ -457,6 +495,60 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
       );
     },
     [],
+  );
+
+  /**
+   * 모서리 손잡이를 잡았다.
+   * 부자재 한가운데를 화면 좌표로 옮겨 두면, 그 뒤로는 손가락이 그 점에서
+   * 얼마나 멀어졌는지(크기)와 어느 쪽으로 돌았는지(기울기)만 재면 된다.
+   */
+  const handleHandleDown = useCallback(
+    (kind: HandleKind, event: ThreeEvent<PointerEvent>) => {
+      event.stopPropagation();
+      const element = containerRef.current;
+      const camera = cameraRef.current;
+      const id = selectedIdRef.current;
+      if (!element || !camera || !id) return;
+      const current = placements.find((p) => p.id === id);
+      if (!current) return;
+
+      const rect = element.getBoundingClientRect();
+      const center = new THREE.Vector3(...current.position).project(camera);
+      const centerX = rect.left + ((center.x + 1) / 2) * rect.width;
+      const centerY = rect.top + ((1 - center.y) / 2) * rect.height;
+      const dx = event.clientX - centerX;
+      const dy = event.clientY - centerY;
+
+      handleDrag.current = {
+        kind,
+        centerX,
+        centerY,
+        // 손잡이를 한가운데 가까이에서 잡아도 갑자기 커지지 않게 바닥을 둔다
+        startDistance: Math.max(12, Math.hypot(dx, dy)),
+        startAngle: Math.atan2(dy, dx),
+        startSize: current.size,
+        startRoll: (current.roll * 180) / Math.PI,
+      };
+      setControlsEnabled(false);
+    },
+    [placements],
+  );
+
+  const handlePointerMove = useCallback(
+    (event: React.PointerEvent) => {
+      const drag = handleDrag.current;
+      if (!drag) return;
+      const dx = event.clientX - drag.centerX;
+      const dy = event.clientY - drag.centerY;
+      if (drag.kind === "resize") {
+        applySize(drag.startSize * (Math.hypot(dx, dy) / drag.startDistance));
+        return;
+      }
+      // 화면 좌표는 아래가 +y라서 부호를 뒤집어야 손가락 방향과 같아진다
+      const angle = Math.atan2(dy, dx);
+      applyRoll(drag.startRoll - ((angle - drag.startAngle) * 180) / Math.PI);
+    },
+    [applySize, applyRoll],
   );
 
   const handleDecoPointerDown = useCallback(
@@ -666,33 +758,47 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
           </div>
 
           {hookMaterial && (
-            <div className="px-4 pt-3">
-              <div className="flex justify-between text-[11px] font-light text-slate-400">
+            <div className="px-3 pt-3">
+              <div className="flex justify-between px-1 text-[11px] font-light text-slate-400">
                 <span>고리 크기</span>
                 <span>{Math.round(hookScale * 100)}%</span>
               </div>
-              <input
-                type="range"
-                min={HOOK_SIZE_MIN * 100}
-                max={HOOK_SIZE_MAX * 100}
-                value={Math.round(hookScale * 100)}
-                onChange={(event) =>
-                  setHookScale(Number(event.target.value) / 100)
-                }
-                className="mt-1 w-full accent-brand"
-              />
-              <div className="mt-2 flex justify-between text-[11px] font-light text-slate-400">
+              <div className="mt-1 flex gap-2">
+                <Tap
+                  label="－"
+                  onClick={() =>
+                    setHookScale((v) =>
+                      clamp(v * 0.88, HOOK_SIZE_MIN, HOOK_SIZE_MAX),
+                    )
+                  }
+                />
+                <Tap
+                  label="＋"
+                  onClick={() =>
+                    setHookScale((v) =>
+                      clamp(v * 1.14, HOOK_SIZE_MIN, HOOK_SIZE_MAX),
+                    )
+                  }
+                />
+              </div>
+              <div className="mt-3 flex justify-between px-1 text-[11px] font-light text-slate-400">
                 <span>고리 방향</span>
                 <span>{hookAngle}°</span>
               </div>
-              <input
-                type="range"
-                min={0}
-                max={359}
-                value={hookAngle}
-                onChange={(event) => setHookAngle(Number(event.target.value))}
-                className="mt-1 w-full accent-brand"
-              />
+              <div className="mt-1 flex gap-2">
+                <Tap
+                  label="↺"
+                  onClick={() => setHookAngle((v) => (v + 345) % 360)}
+                />
+                <Tap
+                  label="↻"
+                  onClick={() => setHookAngle((v) => (v + 15) % 360)}
+                />
+                <Tap
+                  label="90°"
+                  onClick={() => setHookAngle((v) => (v + 90) % 360)}
+                />
+              </div>
             </div>
           )}
 
@@ -714,7 +820,9 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
           ref={containerRef}
           className="h-full w-full touch-none"
           onPointerDownCapture={handlePointerDownCapture}
+          onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerUp}
         >
           <Canvas
             camera={{ position: [0, 0, 6], fov: 40 }}
@@ -725,6 +833,7 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
             }}
           >
             <color attach="background" args={["#0B1620"]} />
+            <CameraProbe cameraRef={cameraRef} />
             {view && (
               <PerspectiveCamera
                 makeDefault
@@ -762,6 +871,8 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
                     material={material}
                     selected={placement.id === selectedId}
                     onPointerDown={handleDecoPointerDown(placement.id)}
+                    onHandleDown={handleHandleDown}
+                    sampleHeight={baseShape?.sampleHeight}
                   />
                 );
               })}
@@ -780,7 +891,7 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
           {mode === "remove"
             ? "떼어낼 부자재를 톡 누르세요"
             : selected
-              ? "핀치로 크기 · 두 손가락 비틀기로 기울기 · 끌어서 위치 이동"
+              ? "오른쪽 아래 점을 끌면 크기 · 위쪽 흰 점을 끌면 기울기 · 가운데를 끌면 위치"
               : "빈 곳을 끌면 돌아가고, 휠을 굴리면 확대돼요"}
         </p>
       </div>
@@ -827,36 +938,22 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
           </div>
         </Section>
 
-        <Section title="크기">
-          <div className="flex justify-between text-[11px] text-slate-400">
-            <span>작게</span>
-            <span>{size < 0.75 ? "작게" : size > 1.4 ? "크게" : "보통"}</span>
-            <span>크게</span>
+        <Section title="크기" note={`${Math.round(size * 100)}%`}>
+          <div className="flex gap-2">
+            <Tap label="－" onClick={() => applySize(size * 0.82)} />
+            <Tap label="＋" onClick={() => applySize(size * 1.22)} />
+            <Tap label="꽉" onClick={() => applySize(SIZE_MAX)} />
+            <Tap label="처음" onClick={() => applySize(1)} />
           </div>
-          <input
-            type="range"
-            min={SIZE_MIN * 100}
-            max={SIZE_MAX * 100}
-            value={Math.round(size * 100)}
-            onChange={(event) => applySize(Number(event.target.value) / 100)}
-            className="mt-1 w-full accent-brand"
-          />
         </Section>
 
-        <Section title="기울기">
-          <div className="flex justify-between text-[11px] text-slate-400">
-            <span>0°</span>
-            <span>{rollDeg}°</span>
-            <span>360°</span>
+        <Section title="기울기" note={`${rollDeg}°`}>
+          <div className="flex gap-2">
+            <Tap label="↺" onClick={() => applyRoll(rollDeg - 15)} />
+            <Tap label="↻" onClick={() => applyRoll(rollDeg + 15)} />
+            <Tap label="90°" onClick={() => applyRoll(rollDeg + 90)} />
+            <Tap label="처음" onClick={() => applyRoll(0)} />
           </div>
-          <input
-            type="range"
-            min={0}
-            max={360}
-            value={rollDeg}
-            onChange={(event) => applyRoll(Number(event.target.value))}
-            className="mt-1 w-full accent-brand"
-          />
         </Section>
 
         <div className="flex flex-col gap-2 p-3">
@@ -890,6 +987,19 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
         </div>
       )}
     </div>
+  );
+}
+
+/** 조절판의 작은 네모 버튼 */
+function Tap({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex-1 rounded-lg border border-[#23404F] bg-[#182D3C] py-2 text-xs text-slate-200 active:bg-brand/20"
+    >
+      {label}
+    </button>
   );
 }
 

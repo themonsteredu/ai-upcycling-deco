@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { autoTrimImage } from "@/lib/auto-trim";
 import type { MaterialRow } from "@/lib/supabase";
+import { HolePuncher } from "./HolePuncher";
 
 type Kind = "deco" | "hook";
 const CATEGORIES = ["천 조각", "단추", "얼굴 부속", "기타"] as const;
@@ -36,6 +37,7 @@ export function MaterialManager({ initial, ready }: Props) {
   const [kind, setKind] = useState<Kind>("deco");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [punching, setPunching] = useState<MaterialRow | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const dragId = useRef<string | null>(null);
 
@@ -269,6 +271,13 @@ export function MaterialManager({ initial, ready }: Props) {
             )}
             <button
               type="button"
+              onClick={() => setPunching(row)}
+              className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-600"
+            >
+              구멍
+            </button>
+            <button
+              type="button"
               onClick={() => void patch(row.id, { is_active: !row.is_active })}
               className={`rounded-full px-3 py-1.5 text-xs font-bold ${
                 row.is_active
@@ -295,7 +304,25 @@ export function MaterialManager({ initial, ready }: Props) {
         <br />· 이미 만든 작품에 쓰인 재료는 빼려고 해도 지워지지 않고 숨겨집니다.
         과거 작품이 깨지지 않게 하기 위해서입니다.
         <br />· 줄을 끌어서 순서를 바꿀 수 있습니다. 오늘 많이 쓸 재료를 위로 올리세요.
+        <br />· <b>구멍</b> 을 누르면 단추 가운데의 실 구멍처럼 안쪽에 남은
+        배경을 뚫을 수 있습니다.
       </p>
+
+      {punching && (
+        <HolePuncher
+          material={punching}
+          onClose={() => setPunching(null)}
+          onSaved={(imageUrl) => {
+            setRows((prev) =>
+              prev.map((row) =>
+                row.id === punching.id ? { ...row, image_url: imageUrl } : row,
+              ),
+            );
+            setPunching(null);
+            say("구멍을 뚫었어요");
+          }}
+        />
+      )}
     </main>
   );
 }

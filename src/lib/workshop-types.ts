@@ -55,11 +55,21 @@ export const HOOK_SIZE_MIN = 0.6;
 export const HOOK_SIZE_MAX = 1.6;
 
 export const SIZE_MIN = 0.45;
-export const SIZE_MAX = 2.0;
+/**
+ * 천 조각처럼 긴 재료는 키링 앞면을 가로로 꽉 채울 수 있어야 한다.
+ * 키링 세로가 2.1이므로 긴 변이 3.1까지 늘어나면 가로로도 다 덮인다.
+ */
+export const SIZE_MAX = 5.0;
 /** 크기 배율 1일 때 부자재의 긴 변 길이 (키링 세로가 2.1) */
 export const DECO_UNIT = 0.62;
 /** 표면에서 살짝 띄워 겹쳐 깜빡이는 것을 막는다 */
 export const DECO_LIFT = 0.008;
+/**
+ * 부자재를 살짝 휘어 키링의 둥근 면에 붙인다.
+ * 평평한 판을 붙이면 큰 재료일수록 가장자리가 표면 속으로 파묻힌다.
+ * 키링 앞면의 대략적인 곡률 반지름.
+ */
+export const DECO_BEND_RADIUS = 2.4;
 
 export const DRAFT_STORAGE_KEY = "upcycling-workshop-draft-v3";
 

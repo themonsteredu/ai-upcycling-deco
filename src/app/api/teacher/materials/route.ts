@@ -92,6 +92,8 @@ export async function PATCH(request: Request) {
     is_active?: boolean;
     /** 순서를 통째로 다시 매길 때 쓴다 */
     order?: string[];
+    /** 다듬은 사진으로 갈아 끼울 때 쓴다 (구멍 뚫기 등) */
+    dataUrl?: string;
   };
 
   if (body.order) {
@@ -118,6 +120,36 @@ export async function PATCH(request: Request) {
   if (body.category !== undefined) patch.category = body.category;
   if (body.is_active !== undefined) patch.is_active = body.is_active;
 
+  /*
+   * 사진을 갈아 끼울 때는 덮어쓰지 않고 새 파일로 올린다.
+   * 같은 주소에 덮어쓰면 학생 태블릿이 예전 사진을 계속 붙들고 있는다.
+   */
+  let imageUrl: string | undefined;
+  if (body.dataUrl) {
+    if (!body.dataUrl.startsWith("data:image/png;base64,")) {
+      return NextResponse.json({ error: "사진 형식이 다릅니다" }, { status: 400 });
+    }
+    const { data: row } = await supabase
+      .from("upcycling_materials")
+      .select("kind")
+      .eq("id", body.id)
+      .maybeSingle();
+
+    const bytes = Buffer.from(body.dataUrl.split(",")[1], "base64");
+    const path = `${row?.kind === "hook" ? "hook" : "deco"}/${crypto.randomUUID()}.png`;
+    const upload = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(path, bytes, { contentType: "image/png", upsert: false });
+    if (upload.error) {
+      return NextResponse.json({ error: upload.error.message }, { status: 500 });
+    }
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+    imageUrl = publicUrl;
+    patch.image_url = publicUrl;
+  }
+
   const { error } = await supabase
     .from("upcycling_materials")
     .update(patch)
@@ -125,7 +157,7 @@ export async function PATCH(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, imageUrl });
 }
 
 /**

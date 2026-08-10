@@ -35,6 +35,12 @@ const PLATEAU = 0.55;
  */
 const BODY_THRESHOLD = 0.4;
 
+/**
+ * 어떤 자리의 앞면이 얼마나 볼록한지 돌려준다 (0 ~ 두께의 절반).
+ * 부자재를 이 곡면에 딱 붙여 놓는 데 쓴다.
+ */
+export type HeightSampler = (x: number, y: number) => number;
+
 export type PillowShape = {
   geometry: THREE.BufferGeometry;
   /** 사진에 찍힌 것 전체가 차지하는 범위 (가운데가 0) */
@@ -43,6 +49,8 @@ export type PillowShape = {
   fabricColor: string;
   /** 고리 끈 끝. 고리를 걸 자리다. 끈이 없으면 null */
   strapTip: { x: number; y: number; outward: 1 | -1 } | null;
+  /** 표면 높이를 물어볼 수 있는 자 */
+  sampleHeight: HeightSampler;
 };
 
 export type InflateOptions = {
@@ -228,6 +236,12 @@ export async function createPillowFromImage(
   const centerY = (minY + maxY) / 2;
   const plateau = Math.max(1, deepest * plateauRatio);
 
+  // 각 칸이 얼마나 부풀었는지 (0~1). 표면 높이를 물어볼 때 다시 쓴다.
+  const swell = new Float32Array(width * height);
+  for (let i = 0; i < swell.length; i++) {
+    swell[i] = Math.sin((Math.min(1, distance[i] / plateau) * Math.PI) / 2);
+  }
+
   const positions: number[] = [];
   const uvs: number[] = [];
   const perSheet = width * height;
@@ -236,19 +250,33 @@ export async function createPillowFromImage(
     const sign = sheet === 0 ? 1 : -1;
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        const index = y * width + x;
-        const depth = Math.sin(
-          (Math.min(1, distance[index] / plateau) * Math.PI) / 2,
-        );
         positions.push(
           (x - centerX) * unit,
           (centerY - y) * unit,
-          sign * halfDepth * depth,
+          sign * halfDepth * swell[y * width + x],
         );
         uvs.push(x / (width - 1), 1 - y / (height - 1));
       }
     }
   }
+
+  /** 네 칸 사이를 부드럽게 이어 읽는다 */
+  const sampleHeight: HeightSampler = (worldX, worldY) => {
+    const gx = centerX + worldX / unit;
+    const gy = centerY - worldY / unit;
+    if (gx < 0 || gy < 0 || gx > width - 1 || gy > height - 1) return 0;
+    const x0 = Math.floor(gx);
+    const y0 = Math.floor(gy);
+    const x1 = Math.min(width - 1, x0 + 1);
+    const y1 = Math.min(height - 1, y0 + 1);
+    const fx = gx - x0;
+    const fy = gy - y0;
+    const top =
+      swell[y0 * width + x0] * (1 - fx) + swell[y0 * width + x1] * fx;
+    const bottom =
+      swell[y1 * width + x0] * (1 - fx) + swell[y1 * width + x1] * fx;
+    return halfDepth * (top * (1 - fy) + bottom * fy);
+  };
 
   const frontIndex: number[] = [];
   const backIndex: number[] = [];
@@ -331,6 +359,7 @@ export async function createPillowFromImage(
   return {
     geometry,
     strapTip,
+    sampleHeight,
     fabricColor: averageFabricColor(rgb, alpha, distance, deepest),
     extent: {
       minX: (minX - centerX) * unit,
