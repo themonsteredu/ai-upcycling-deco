@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 import type { Intro, QuizItem } from "@/lib/intro";
+import { INTRO_CARDS } from "@/lib/intro-cards";
 
 /**
  * 수업 도입 자료 준비 화면.
@@ -53,6 +54,7 @@ export function IntroManager({
 }) {
   const [slides, setSlides] = useState<string[]>(initial.slides);
   const [quiz, setQuiz] = useState<QuizItem[]>(initial.quiz);
+  const [useCards, setUseCards] = useState(initial.useCards);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -96,6 +98,26 @@ export function IntroManager({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ slides: next }),
     });
+  }, []);
+
+  const toggleCards = useCallback(async (next: boolean) => {
+    setUseCards(next);
+    const response = await fetch("/api/teacher/intro", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ useCards: next }),
+    });
+    if (!response.ok) {
+      // 저장이 안 됐으면 스위치를 되돌려 놓는다. 안 그러면 켠 줄 알고 수업에 들어간다
+      setUseCards(!next);
+      say("바꾸지 못했습니다. 잠시 뒤 다시 눌러 주세요.");
+      return;
+    }
+    say(
+      next
+        ? "카드뉴스를 씁니다. 발표 화면 맨 앞에 나옵니다."
+        : "카드뉴스를 끕니다. 올리신 슬라이드부터 나옵니다.",
+    );
   }, []);
 
   const move = (from: number, by: number) => {
@@ -162,6 +184,55 @@ export function IntroManager({
           {message}
         </p>
       )}
+
+      {/* ── 앱에 들어 있는 카드뉴스 ── */}
+      <section className="mt-8 rounded-xl border border-slate-200 bg-white p-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="font-bold">
+            카드뉴스 {INTRO_CARDS.length}장{" "}
+            <span className="font-normal text-slate-400">(앱에 들어 있음)</span>
+          </h2>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={useCards}
+            disabled={!ready}
+            onClick={() => void toggleCards(!useCards)}
+            className={`ml-auto rounded-lg px-5 py-2.5 text-sm font-bold disabled:opacity-40 ${
+              useCards
+                ? "bg-brand text-white"
+                : "border-2 border-slate-300 bg-white text-slate-500"
+            }`}
+          >
+            {useCards ? "쓰는 중" : "안 씁니다"}
+          </button>
+        </div>
+        <p className="mt-2 text-sm leading-relaxed text-slate-500">
+          업사이클링을 설명하는 카드가 이미 만들어져 있습니다. 발표 화면 맨 앞에
+          나오고, 마지막 장이 「아무거나 다 되는 건 아닙니다」로 끝나 아래 퀴즈로
+          그대로 이어집니다. 직접 만드신 PPT만 쓰시려면 꺼 두세요.
+        </p>
+
+        <ol
+          className={`mt-4 space-y-1.5 text-sm ${
+            useCards ? "text-slate-600" : "text-slate-300"
+          }`}
+        >
+          {INTRO_CARDS.map((card, index) => (
+            <li key={card.headline} className="flex gap-2.5">
+              <span className="w-4 shrink-0 text-right font-bold text-slate-400">
+                {index + 1}
+              </span>
+              <span className="leading-relaxed">
+                {card.kind === "number" && (
+                  <b className="text-brand-dark">{card.big} · </b>
+                )}
+                {card.headline.replace("\n", " ")}
+              </span>
+            </li>
+          ))}
+        </ol>
+      </section>
 
       {/* ── 슬라이드 ── */}
       <section className="mt-8">

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { Intro, QuizItem } from "@/lib/intro";
+import { INTRO_CARDS, type IntroCard } from "@/lib/intro-cards";
+import { IntroCardView } from "./IntroCardView";
 
 /**
  * 프로젝터에 띄우는 발표 화면.
@@ -12,20 +14,34 @@ import type { Intro, QuizItem } from "@/lib/intro";
  */
 
 type Step =
+  | { kind: "card"; card: IntroCard }
   | { kind: "slide"; url: string }
   | { kind: "quiz"; item: QuizItem }
   | { kind: "end" };
 
-function buildSteps(intro: Intro): Step[] {
+/*
+ * 카드뉴스가 먼저, 선생님이 올린 슬라이드가 그다음, 퀴즈가 마지막이다.
+ * 카드뉴스 마지막 장이 「아무거나 되는 건 아니다」로 끝나므로 퀴즈로 바로 이어진다.
+ */
+function buildSteps(intro: Intro, withCards: boolean): Step[] {
   return [
+    ...(withCards
+      ? INTRO_CARDS.map((card) => ({ kind: "card", card }) as const)
+      : []),
     ...intro.slides.map((url) => ({ kind: "slide", url }) as const),
     ...intro.quiz.map((item) => ({ kind: "quiz", item }) as const),
     { kind: "end" } as const,
   ];
 }
 
-export function Present({ intro }: { intro: Intro }) {
-  const steps = buildSteps(intro);
+export function Present({
+  intro,
+  withCards = true,
+}: {
+  intro: Intro;
+  withCards?: boolean;
+}) {
+  const steps = buildSteps(intro, withCards);
   const [at, setAt] = useState(0);
   /** 퀴즈에서 정답을 열었는지 */
   const [revealed, setRevealed] = useState(false);
@@ -83,6 +99,8 @@ export function Present({ intro }: { intro: Intro }) {
       />
 
       <div className="flex flex-1 items-center justify-center p-6">
+        {step.kind === "card" && <IntroCardView card={step.card} />}
+
         {step.kind === "slide" && (
           // eslint-disable-next-line @next/next/no-img-element
           <img

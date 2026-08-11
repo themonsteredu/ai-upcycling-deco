@@ -24,12 +24,15 @@ export type Intro = {
   id: string;
   slides: string[];
   quiz: QuizItem[];
+  /** 앱에 들어 있는 카드뉴스를 쓸지. 직접 만든 PPT만 쓰고 싶으면 끈다 */
+  useCards: boolean;
 };
 
 type Row = {
   id: string;
   slides: string[] | null;
   quiz: QuizItem[] | null;
+  use_cards?: boolean | null;
 };
 
 export function toIntro(row: Row): Intro {
@@ -37,6 +40,7 @@ export function toIntro(row: Row): Intro {
     id: row.id,
     slides: Array.isArray(row.slides) ? row.slides : [],
     quiz: Array.isArray(row.quiz) ? row.quiz : [],
+    useCards: row.use_cards !== false,
   };
 }
 
@@ -100,4 +104,9 @@ export const DEFAULT_QUIZ: QuizItem[] = [
 ];
 
 /** 아직 아무것도 안 올렸을 때 쓸 빈 자료 */
-export const EMPTY_INTRO: Intro = { id: "", slides: [], quiz: DEFAULT_QUIZ };
+export const EMPTY_INTRO: Intro = {
+  id: "",
+  slides: [],
+  quiz: DEFAULT_QUIZ,
+  useCards: true,
+};

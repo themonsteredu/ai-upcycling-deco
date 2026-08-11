@@ -14,11 +14,11 @@ export default async function IntroPage() {
   if (blocked) return blocked;
 
   const supabase = getSupabaseAdmin();
-  let intro: Intro = { id: "", slides: [], quiz: DEFAULT_QUIZ };
+  let intro: Intro = { id: "", slides: [], quiz: DEFAULT_QUIZ, useCards: true };
   if (supabase) {
     const { data } = await supabase
       .from("upcycling_intro")
-      .select("id, slides, quiz")
+      .select("id, slides, quiz, use_cards")
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();

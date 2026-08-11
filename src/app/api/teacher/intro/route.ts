@@ -44,7 +44,7 @@ async function putPhoto(supabase: Admin, dataUrl: string, folder: string) {
 async function findOrCreate(supabase: Admin) {
   const { data } = await supabase
     .from("upcycling_intro")
-    .select("id, slides, quiz")
+    .select("id, slides, quiz, use_cards")
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -53,7 +53,7 @@ async function findOrCreate(supabase: Admin) {
   const insert = await supabase
     .from("upcycling_intro")
     .insert({ slides: [], quiz: [] })
-    .select("id, slides, quiz")
+    .select("id, slides, quiz, use_cards")
     .single();
   if (insert.error) throw new Error(insert.error.message);
   return toIntro(insert.data);
@@ -104,6 +104,7 @@ export async function PATCH(request: Request) {
     quiz?: QuizItem[];
     /** 퀴즈 문항에 붙일 새 사진 [{ id, dataUrl }] */
     photos?: { id: string; dataUrl: string }[];
+    useCards?: boolean;
   };
 
   try {
@@ -113,6 +114,7 @@ export async function PATCH(request: Request) {
     };
 
     if (Array.isArray(body.slides)) patch.slides = body.slides;
+    if (typeof body.useCards === "boolean") patch.use_cards = body.useCards;
 
     if (Array.isArray(body.quiz)) {
       // 새로 붙인 사진을 먼저 올려 주소로 바꿔 둔다
