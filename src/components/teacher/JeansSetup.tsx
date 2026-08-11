@@ -275,7 +275,41 @@ export function JeansSetup({ initial, ready }: Props) {
 
           <div className="mt-5 grid gap-5 sm:grid-cols-[minmax(0,1fr)_260px]">
           <div>
-            <div className="flex gap-2">
+            {/*
+              사진 올리는 버튼은 늘 두 개 다 보이게 둔다.
+              보고 있는 면에 따라 하나만 작은 글씨로 바꿔 뒀더니
+              「사진 올리는 곳이 없다」는 말을 들었다.
+            */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => frontRef.current?.click()}
+                className="rounded-lg border-2 border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 disabled:opacity-40"
+              >
+                앞면 사진 바꾸기
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => backRef.current?.click()}
+                className={`rounded-lg border-2 px-4 py-2.5 text-sm font-bold disabled:opacity-40 ${
+                  jeans.backUrl
+                    ? "border-slate-300 bg-white text-slate-700"
+                    : "border-brand bg-brand text-white"
+                }`}
+              >
+                뒷면 사진 {jeans.backUrl ? "바꾸기" : "올리기"}
+              </button>
+              {busy && (
+                <span className="self-center text-sm text-slate-400">
+                  올리는 중…
+                </span>
+              )}
+            </div>
+
+            <div className="mt-3 flex gap-2">
+              <span className="self-center text-xs text-slate-400">보는 면</span>
               {(["front", "back"] as JeansSide[]).map((value) => (
                 <button
                   key={value}
@@ -290,22 +324,6 @@ export function JeansSetup({ initial, ready }: Props) {
                   {value === "front" ? "앞면" : "뒷면"}
                 </button>
               ))}
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  (side === "front" ? frontRef : backRef).current?.click()
-                }
-                className="ml-auto text-sm text-slate-400 underline disabled:opacity-40"
-              >
-                {busy
-                  ? "올리는 중…"
-                  : side === "front"
-                    ? "앞면 사진 바꾸기"
-                    : jeans.backUrl
-                      ? "뒷면 사진 바꾸기"
-                      : "뒷면 사진 올리기"}
-              </button>
             </div>
 
             {photoUrl ? (
