@@ -18,6 +18,26 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="ko" className="h-full antialiased">
+      <head>
+        {/*
+          제일 많이 쓰는 두 굵기는 미리 받아 둔다.
+          안 그러면 화면이 뜬 뒤에야 글꼴을 받으러 가서 글자가 늦게 나온다.
+        */}
+        <link
+          rel="preload"
+          href="/fonts/S-CoreDream-4Regular.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+        <link
+          rel="preload"
+          href="/fonts/S-CoreDream-7ExtraBold.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
