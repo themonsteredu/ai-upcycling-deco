@@ -255,7 +255,25 @@ export function JeansSetup({ initial, ready }: Props) {
           </button>
         </div>
       ) : (
-        <div className="mt-6 grid gap-5 sm:grid-cols-[minmax(0,1fr)_260px]">
+        <>
+          {/*
+            사진만 올려 두고 자리를 안 찍으면 학생 화면이 텅 빈다.
+            그게 제일 흔한 실수라 눈에 띄게 알려 준다.
+          */}
+          {placed === 0 && (
+            <div className="mt-5 rounded-xl border-2 border-brand bg-brand-light p-4">
+              <p className="font-bold text-brand-dark">
+                아직 누를 자리를 하나도 안 찍었습니다
+              </p>
+              <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                이대로 두면 학생 화면에 <b>이 사진이 나오지 않습니다.</b>{" "}
+                오른쪽에서 조각을 하나 고르고, 사진에서 그 자리를 한 번 누르세요.
+                그리고 아래 <b>저장하기</b> 를 누르면 끝입니다.
+              </p>
+            </div>
+          )}
+
+          <div className="mt-5 grid gap-5 sm:grid-cols-[minmax(0,1fr)_260px]">
           <div>
             <div className="flex gap-2">
               {(["front", "back"] as JeansSide[]).map((value) => (
@@ -344,8 +362,8 @@ export function JeansSetup({ initial, ready }: Props) {
           </div>
 
           <div>
-            <p className="text-xs tracking-wider text-slate-400">
-              찍을 조각을 고르고 사진을 누르세요
+            <p className="rounded-lg bg-slate-800 px-3 py-2 text-xs leading-relaxed font-bold text-white">
+              ① 조각을 고르고 → ② 사진에서 그 자리를 누르세요
             </p>
             <div className="mt-2 space-y-1.5">
               {DENIM_PARTS.map((part) => {
@@ -403,7 +421,8 @@ export function JeansSetup({ initial, ready }: Props) {
               것이 좋지만, 몇 개만 해도 수업은 돌아갑니다.
             </p>
           </div>
-        </div>
+          </div>
+        </>
       )}
     </main>
   );

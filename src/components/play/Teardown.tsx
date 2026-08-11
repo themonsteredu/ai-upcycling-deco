@@ -37,12 +37,19 @@ export function Teardown({ taken, chosen, onChange, onDone, photo }: Props) {
   const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /*
+   * 사진은 있는데 누를 자리를 아직 안 찍어 두었으면 쓸 수가 없다.
+   * 학생 화면이 0/0으로 텅 비어 고장난 것처럼 보이므로, 그때는
+   * 앱이 그린 청바지로 돌아간다.
+   */
+  const usable = photo && photo.zones.length > 0 ? photo : null;
+
+  /*
    * 사진을 쓸 때는 선생님이 자리를 찍어 둔 조각만 찾을 수 있다.
    * 자리가 없는 조각까지 세면 학생이 영영 못 끝낸다.
    */
-  const parts = photo
+  const parts = usable
     ? DENIM_PARTS.filter((part) =>
-        photo.zones.some((zone) => zone.partId === part.id),
+        usable.zones.some((zone) => zone.partId === part.id),
       )
     : DENIM_PARTS;
   const allTaken = parts.length > 0 && parts.every((part) => taken.includes(part.id));
@@ -78,9 +85,9 @@ export function Teardown({ taken, chosen, onChange, onDone, photo }: Props) {
 
       <div className="mt-5 grid gap-5 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)]">
         <div className="rounded-2xl bg-[#EEF2F6] p-4">
-          {photo ? (
+          {usable ? (
             <JeansPhotoStage
-              photo={photo}
+              photo={usable}
               taken={taken}
               hint={hint}
               onPick={pick}
