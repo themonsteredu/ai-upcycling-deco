@@ -3,12 +3,14 @@
 import { useState } from "react";
 
 type Props = {
+  /** 어느 화면으로 들어가려는지 */
+  title: string;
   /** 비밀번호가 맞으면 참을 돌려주는 서버 동작 */
   onSubmit: (password: string) => Promise<boolean>;
 };
 
 /** 선생님 화면 잠금 */
-export function TeacherGate({ onSubmit }: Props) {
+export function TeacherGate({ title, onSubmit }: Props) {
   const [password, setPassword] = useState("");
   const [wrong, setWrong] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -16,7 +18,7 @@ export function TeacherGate({ onSubmit }: Props) {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6">
       <p className="text-sm font-medium text-brand">선생님 화면</p>
-      <h1 className="mt-2 text-2xl font-bold tracking-tight">재료함 관리</h1>
+      <h1 className="mt-2 text-2xl font-bold tracking-tight">{title}</h1>
       <p className="mt-2 text-sm font-light text-slate-500">
         비밀번호를 넣어 주세요.
       </p>

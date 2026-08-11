@@ -24,6 +24,12 @@ export const BASE_LABEL: Record<BaseType, string> = {
 };
 
 /**
+ * 고를 수 있는 키링 본체.
+ * `public/base/{이름}-front.png` 와 `-back.png` 두 장이 있어야 한다.
+ */
+export const AVAILABLE_BASES: BaseType[] = ["denim", "linen"];
+
+/**
  * 부자재 하나가 키링 표면에 붙은 상태.
  * 갤러리에서 3D로 되살리려면 이 값만 있으면 된다.
  */
@@ -51,6 +57,8 @@ export type WorkshopDraft = {
   placements: Placement[];
   /** 지금 걸어 둔 고리. 없으면 null */
   hookId: string | null;
+  /** 고리 크기 배율. 없으면 100%로 본다 */
+  hookScale?: number;
   /** 고리를 돌린 각도 (도) */
   hookAngle: number;
   /** 고리를 좌우로 뒤집었는지. 없으면 안 뒤집은 것으로 본다 */
@@ -82,6 +90,3 @@ export const DECO_LIFT = 0.008;
 export const DECO_BEND_RADIUS = 2.4;
 
 export const DRAFT_STORAGE_KEY = "upcycling-workshop-draft-v3";
-
-/** 넣은 사진을 이 크기로 줄여 저장한다. 브라우저 저장 공간이 넉넉하지 않다 */
-export const UPLOAD_MAX_PX = 384;

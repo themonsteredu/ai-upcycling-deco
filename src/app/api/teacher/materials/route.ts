@@ -175,10 +175,15 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "어떤 재료인지 없습니다" }, { status: 400 });
   }
 
+  /*
+   * 작품에는 재료 번호가 `saved-` 를 붙인 채로 적혀 있다.
+   * 앞의 `saved-` 없이 찾으면 영영 걸리지 않아서, 이미 쓰인 재료도
+   * 그냥 지워지고 그 작품이 깨진다.
+   */
   const { count } = await supabase
     .from("upcycling_works")
     .select("id", { count: "exact", head: true })
-    .contains("placements", [{ materialId: id }]);
+    .contains("placements", [{ materialId: `saved-${id}` }]);
 
   if ((count ?? 0) > 0) {
     await supabase

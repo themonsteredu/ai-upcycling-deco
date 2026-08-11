@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { BaseType, Material } from "@/lib/workshop-types";
+import type { BaseType } from "@/lib/workshop-types";
 
 /**
  * 3D 화면은 브라우저에서만 그릴 수 있고,
@@ -19,10 +19,6 @@ const Workshop = dynamic(
   },
 );
 
-export function WorkshopClient(props: {
-  materials: Material[];
-  hooks: Material[];
-  availableBases: BaseType[];
-}) {
+export function WorkshopClient(props: { availableBases: BaseType[] }) {
   return <Workshop {...props} />;
 }

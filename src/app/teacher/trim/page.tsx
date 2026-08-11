@@ -1,14 +1,16 @@
+import { teacherGuard } from "@/components/teacher/TeacherPage";
 import { TrimStudio } from "@/components/teacher/TrimStudio";
+
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "재료 다듬기 — 업사이클 키링 디자인",
 };
 
-/**
- * 선생님 전용 화면.
- * 노트북에서 쓰는 것을 전제로 하고, 아직 비밀번호 잠금은 걸려 있지 않다.
- * (잠금과 Supabase 저장은 다음 단계에서 붙인다)
- */
-export default function TrimPage() {
+/** 선생님 전용. 노트북에서 쓰는 것을 전제로 한다 */
+export default async function TrimPage() {
+  const blocked = await teacherGuard("재료 다듬기");
+  if (blocked) return blocked;
+
   return <TrimStudio />;
 }

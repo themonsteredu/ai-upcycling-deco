@@ -13,8 +13,8 @@ export default function Home() {
         디자인
       </h1>
       <p className="mt-4 leading-relaxed font-light text-slate-600">
-        버려진 청바지로 만든 키링에 부자재를 붙여 설계도를 만들고,
-        <br />그 화면을 보면서 실제 바느질로 완성합니다.
+        버려진 청바지로 만든 키링에 부자재를 붙여 설계도를 만들고, 그 화면을
+        보면서 실제 바느질로 완성합니다.
       </p>
 
       <Link
@@ -28,24 +28,12 @@ export default function Home() {
         재료를 고르고 키링 위를 눌러 붙여 보세요
       </p>
 
-      <div className="mt-auto flex justify-center gap-5 pt-14">
+      <div className="mt-auto flex justify-center pt-14">
         <Link
-          href="/teacher/materials"
+          href="/teacher"
           className="text-xs font-light text-slate-400 underline underline-offset-4"
         >
-          선생님용 — 재료함 관리
-        </Link>
-        <Link
-          href="/teacher/trim"
-          className="text-xs font-light text-slate-400 underline underline-offset-4"
-        >
-          재료 다듬기
-        </Link>
-        <Link
-          href="/teacher/setup"
-          className="text-xs font-light text-slate-400 underline underline-offset-4"
-        >
-          연결 점검
+          선생님 화면
         </Link>
       </div>
     </main>

@@ -11,7 +11,6 @@ import {
 import * as THREE from "three";
 import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
-import { autoTrimImage, type TrimMode } from "@/lib/auto-trim";
 import { getSupabase, type MaterialRow } from "@/lib/supabase";
 import type { PillowShape } from "@/lib/pillow-geometry";
 import { HOOK_HEIGHT } from "./Hook";
@@ -84,11 +83,32 @@ function CameraProbe({
 }
 
 type Props = {
-  materials: Material[];
-  /** 저장소 public/hooks 에 들어 있는 고리. 모든 학생에게 똑같이 보인다 */
-  hooks: Material[];
   availableBases: BaseType[];
 };
+
+/**
+ * 한 번 받아 온 재료 목록을 브라우저에 담아 둔다.
+ *
+ * 수업 도중 인터넷이 끊겨도 재료함이 비어 보이지 않게 하기 위한 것이다.
+ * 담기는 것은 재료 이름과 사진 주소뿐이라 자리를 거의 안 쓴다.
+ */
+const MATERIAL_CACHE_KEY = "upcycling-materials-cache-v1";
+
+type MaterialCache = { decos: Material[]; hooks: Material[] };
+
+function readMaterialCache(): MaterialCache {
+  try {
+    const raw = window.localStorage.getItem(MATERIAL_CACHE_KEY);
+    if (!raw) return { decos: [], hooks: [] };
+    const cache = JSON.parse(raw) as MaterialCache;
+    return {
+      decos: Array.isArray(cache?.decos) ? cache.decos : [],
+      hooks: Array.isArray(cache?.hooks) ? cache.hooks : [],
+    };
+  } catch {
+    return { decos: [], hooks: [] };
+  }
+}
 
 function readDraft(availableBases: BaseType[]): WorkshopDraft | null {
   try {
@@ -101,6 +121,7 @@ function readDraft(availableBases: BaseType[]): WorkshopDraft | null {
         : (availableBases[0] ?? "denim"),
       placements: Array.isArray(draft?.placements) ? draft.placements : [],
       hookId: draft?.hookId ?? null,
+      hookScale: draft?.hookScale ?? 1,
       hookAngle: draft?.hookAngle ?? 0,
       hookFlip: draft?.hookFlip ?? false,
     };
@@ -109,28 +130,8 @@ function readDraft(availableBases: BaseType[]): WorkshopDraft | null {
   }
 }
 
-/**
- * 저장소 폴더에서 온 사진도 넣을 때와 똑같이 배경을 지우고 잘라 준다.
- * 선생님이 폴더에 그냥 넣어도 손질 없이 바로 쓸 수 있어야 한다.
- */
-function trimFolderMaterial(material: Material, mode: TrimMode) {
-  return new Promise<Material>((resolve) => {
-    const image = new Image();
-    image.crossOrigin = "anonymous";
-    image.onload = () => {
-      const result = autoTrimImage(image, mode);
-      resolve(
-        result
-          ? { ...material, imageUrl: result.dataUrl, aspect: result.aspect }
-          : material,
-      );
-    };
-    image.onerror = () => resolve(material);
-    image.src = material.imageUrl;
-  });
-}
-
-export function Workshop({ materials, hooks, availableBases }: Props) {
+export function Workshop({ availableBases }: Props) {
+  const [cache] = useState(readMaterialCache);
   const [initialDraft] = useState(() => readDraft(availableBases));
   const [baseType, setBaseType] = useState<BaseType>(
     initialDraft?.baseType ?? availableBases[0] ?? "denim",
@@ -141,7 +142,7 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
   const [hookId, setHookId] = useState<string | null>(
     initialDraft?.hookId ?? null,
   );
-  const [hookScale, setHookScale] = useState(1);
+  const [hookScale, setHookScale] = useState(initialDraft?.hookScale ?? 1);
   const [hookAngle, setHookAngle] = useState(initialDraft?.hookAngle ?? 0);
   const [hookFlip, setHookFlip] = useState(initialDraft?.hookFlip ?? false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -175,12 +176,9 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
   } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 폴더 사진은 다듬은 뒤에 쓴다
-  const [folderMaterials, setFolderMaterials] = useState<Material[]>(materials);
-  const [folderHooks, setFolderHooks] = useState<Material[]>(hooks);
-  // 선생님 재료함(Supabase)에서 가져온 재료. 연결이 없으면 그냥 비어 있다
-  const [savedMaterials, setSavedMaterials] = useState<Material[]>([]);
-  const [savedHooks, setSavedHooks] = useState<Material[]>([]);
+  // 선생님 재료함에서 가져온 재료. 아직 못 받았으면 지난번에 담아 둔 것을 쓴다
+  const [allMaterials, setAllMaterials] = useState<Material[]>(cache.decos);
+  const [allHooks, setAllHooks] = useState<Material[]>(cache.hooks);
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -202,50 +200,29 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
           baseScale: Number(row.base_scale) || 1,
           category: (row.category as Material["category"]) ?? "기타",
         });
-        setSavedMaterials(rows.filter((r) => r.kind === "deco").map(toMaterial));
-        setSavedHooks(rows.filter((r) => r.kind === "hook").map(toMaterial));
+        const decos = rows.filter((r) => r.kind === "deco").map(toMaterial);
+        const hooks = rows.filter((r) => r.kind === "hook").map(toMaterial);
+        setAllMaterials(decos);
+        setAllHooks(hooks);
+        try {
+          window.localStorage.setItem(
+            MATERIAL_CACHE_KEY,
+            JSON.stringify({ decos, hooks }),
+          );
+        } catch {
+          // 저장 공간이 부족해도 이번 수업은 그대로 돌아간다
+        }
       });
     return () => {
       alive = false;
     };
   }, []);
 
-  useEffect(() => {
-    let alive = true;
-    Promise.all(materials.map((m) => trimFolderMaterial(m, "outside"))).then(
-      (list) => {
-        if (alive) setFolderMaterials(list);
-      },
-    );
-    return () => {
-      alive = false;
-    };
-  }, [materials]);
-
-  useEffect(() => {
-    let alive = true;
-    // 고리는 가운데 구멍까지 뚫는다
-    Promise.all(hooks.map((h) => trimFolderMaterial(h, "holes"))).then((list) => {
-      if (alive) setFolderHooks(list);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [hooks]);
-
-  const allMaterials = useMemo(
-    () => [...savedMaterials, ...folderMaterials],
-    [savedMaterials, folderMaterials],
-  );
   const materialById = useMemo(
     () => new Map(allMaterials.map((m) => [m.id, m])),
     [allMaterials],
   );
   const picked = pickedId ? materialById.get(pickedId) : undefined;
-  const allHooks = useMemo(
-    () => [...savedHooks, ...folderHooks],
-    [savedHooks, folderHooks],
-  );
   const hookMaterial = allHooks.find((m) => m.id === hookId) ?? null;
   const selected = placements.find((p) => p.id === selectedId) ?? null;
   const usedKinds = new Set(placements.map((p) => p.materialId)).size;
@@ -267,6 +244,7 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
       baseType,
       placements,
       hookId,
+      hookScale,
       hookAngle,
       hookFlip,
     };
@@ -275,7 +253,7 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
     } catch {
       // 저장 공간이 부족해도 작업은 계속되어야 한다
     }
-  }, [baseType, placements, hookId, hookAngle, hookFlip]);
+  }, [baseType, placements, hookId, hookScale, hookAngle, hookFlip]);
 
   /* ---------- 화면에 꽉 차게 맞추기 ---------- */
 
