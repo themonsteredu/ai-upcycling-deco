@@ -179,8 +179,9 @@ export function JeansSetup({ initial, ready }: Props) {
     <main className="mx-auto w-full max-w-4xl px-6 py-8">
       <h1 className="text-xl font-bold tracking-tight">청바지 사진 준비</h1>
       <p className="mt-2 leading-relaxed text-slate-600">
-        수업에 가져갈 <b>진짜 청바지</b>를 찍어 올리면, 학생들이 그 청바지를
-        해체하게 됩니다. 사진을 올린 뒤 조각마다 자리를 한 번씩 찍어 주세요.
+        학생들이 화면에서 해체할 청바지 사진입니다. <b>수업에 가져가지 않아도
+        됩니다</b> — 안 입는 청바지를 아무 데서나 한 번 찍어 올리면 그걸로
+        끝입니다. 올린 뒤 조각마다 자리를 한 번씩 찍어 주세요.
       </p>
 
       {!ready && (
