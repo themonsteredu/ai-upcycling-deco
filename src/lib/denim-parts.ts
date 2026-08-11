@@ -108,7 +108,7 @@ export const KEYRINGS_PER_JEANS = DENIM_PARTS.reduce(
 /** 헌옷수거함에 넣었을 때 받는 값 (원) */
 export const THROWN_AWAY_PRICE = 300;
 /** 키링 하나에 매겨지는 값 (원). 선생님이 실제 판매가로 고치면 된다 */
-export const KEYRING_PRICE = 2000;
+export const KEYRING_PRICE = 5000;
 
 export function partById(id: string) {
   return DENIM_PARTS.find((part) => part.id === id) ?? null;
