@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { splitAndTrim } from "@/lib/grid-split";
+import type { TrimMode } from "@/lib/auto-trim";
 import { CropStage, type CropRect } from "./CropStage";
 import { TrimStage } from "./TrimStage";
 
@@ -74,6 +75,7 @@ export function TrimStudio() {
   const [gridColumns, setGridColumns] = useState(3);
   const [gridRows, setGridRows] = useState(5);
   const [splitting, setSplitting] = useState(false);
+  const [splitMode, setSplitMode] = useState<TrimMode>("outside");
   const [notice, setNotice] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -141,7 +143,7 @@ export function TrimStudio() {
     // 화면이 멈춘 것처럼 보이지 않게 한 번 쉬어 준다
     await new Promise((resolve) => setTimeout(resolve, 30));
     try {
-      const pieces = splitAndTrim(current.image, gridColumns, gridRows);
+      const pieces = splitAndTrim(current.image, gridColumns, gridRows, splitMode);
       if (pieces.length === 0) return;
       const made = await Promise.all(
         pieces.map(async (piece) => {
@@ -174,7 +176,7 @@ export function TrimStudio() {
     } finally {
       setSplitting(false);
     }
-  }, [current, gridColumns, gridRows, index, items, goTo]);
+  }, [current, gridColumns, gridRows, splitMode, index, items, goTo]);
 
   /** 다듬은 결과를 선생님 재료함으로 그대로 보낸다 */
   const sendToBox = useCallback(
@@ -410,17 +412,44 @@ export function TrimStudio() {
                   />
                   칸
                 </label>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-slate-500">배경을</span>
+                {(
+                  [
+                    ["outside", "바깥만 (속 그대로)"],
+                    ["holes", "구멍까지 뚫기"],
+                  ] as [TrimMode, string][]
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setSplitMode(value)}
+                    className={`rounded-lg border px-3 py-1.5 font-bold ${
+                      splitMode === value
+                        ? "border-brand bg-brand-light text-brand-dark"
+                        : "border-slate-300 text-slate-500"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
                 <button
                   type="button"
                   onClick={() => void splitCurrent()}
                   disabled={splitting}
-                  className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                  className="ml-auto rounded-lg bg-slate-800 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                 >
                   {splitting
                     ? "만드는 중…"
                     : `${gridColumns * gridRows}개로 나눠 한 번에 만들기`}
                 </button>
               </div>
+              <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                천 조각처럼 <b>속이 꽉 찬</b> 재료는 「바깥만」, 단추처럼{" "}
+                <b>가운데가 뚫려야 하는</b> 재료는 「구멍까지」를 고르세요.
+              </p>
             </div>
 
             <div className="flex gap-2">

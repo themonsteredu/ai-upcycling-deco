@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { autoTrimImage } from "@/lib/auto-trim";
+import { autoTrimImage, type TrimMode } from "@/lib/auto-trim";
 import type { MaterialRow } from "@/lib/supabase";
 import { HolePuncher } from "./HolePuncher";
 
@@ -15,21 +15,27 @@ type Props = {
 };
 
 /** 사진을 배경 지우고 잘라서 보낼 수 있는 형태로 만든다 */
-function prepare(file: File, punchHoles: boolean) {
-  return new Promise<string | null>((resolve) => {
-    const objectUrl = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      const result = autoTrimImage(image, punchHoles);
-      URL.revokeObjectURL(objectUrl);
-      resolve(result?.dataUrl ?? null);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve(null);
-    };
-    image.src = objectUrl;
-  });
+function prepare(file: File, mode: TrimMode) {
+  return new Promise<{ dataUrl: string; survivedRatio: number } | null>(
+    (resolve) => {
+      const objectUrl = URL.createObjectURL(file);
+      const image = new Image();
+      image.onload = () => {
+        const result = autoTrimImage(image, mode);
+        URL.revokeObjectURL(objectUrl);
+        resolve(
+          result
+            ? { dataUrl: result.dataUrl, survivedRatio: result.survivedRatio }
+            : null,
+        );
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(null);
+      };
+      image.src = objectUrl;
+    },
+  );
 }
 
 export function MaterialManager({ initial, ready }: Props) {
@@ -38,6 +44,8 @@ export function MaterialManager({ initial, ready }: Props) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [punching, setPunching] = useState<MaterialRow | null>(null);
+  /** 고른 사진들. 어떻게 지울지 답을 받은 뒤에 올린다 */
+  const [waiting, setWaiting] = useState<File[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const dragId = useRef<string | null>(null);
 
@@ -46,16 +54,18 @@ export function MaterialManager({ initial, ready }: Props) {
   const say = (text: string | null) => setMessage(text);
 
   const addFiles = useCallback(
-    async (files: FileList | null) => {
-      if (!files || files.length === 0) return;
+    async (files: File[], mode: TrimMode) => {
+      if (files.length === 0) return;
       setBusy(true);
       say("사진을 다듬는 중…");
       const made: MaterialRow[] = [];
-      for (const file of Array.from(files)) {
-        if (!file.type.startsWith("image/")) continue;
-        // 고리는 가운데 구멍까지 뚫는다
-        const dataUrl = await prepare(file, kind === "hook");
-        if (!dataUrl) continue;
+      let thin = 0;
+      for (const file of files) {
+        const trimmed = await prepare(file, mode);
+        if (!trimmed) continue;
+        // 남은 넓이가 너무 적으면 재료까지 지워졌다는 뜻이다
+        if (trimmed.survivedRatio < 0.15) thin++;
+        const dataUrl = trimmed.dataUrl;
         const response = await fetch("/api/teacher/materials", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -76,7 +86,12 @@ export function MaterialManager({ initial, ready }: Props) {
       }
       setRows((prev) => [...prev, ...made]);
       setBusy(false);
-      say(`${made.length}개를 재료함에 넣었어요`);
+      say(
+        thin > 0
+          ? `${made.length}개를 넣었어요. 그중 ${thin}개는 많이 지워졌습니다 — ` +
+              `속까지 지워졌으면 빼고, 「재료 다듬기」에서 손으로 잘라 주세요.`
+          : `${made.length}개를 재료함에 넣었어요`,
+      );
     },
     [kind],
   );
@@ -181,11 +196,71 @@ export function MaterialManager({ initial, ready }: Props) {
           multiple
           hidden
           onChange={(event) => {
-            void addFiles(event.target.files);
+            const picked = Array.from(event.target.files ?? []).filter((file) =>
+              file.type.startsWith("image/"),
+            );
             event.target.value = "";
+            if (picked.length > 0) setWaiting(picked);
           }}
         />
       </div>
+
+      {waiting && (
+        <div className="mt-5 rounded-xl border-2 border-brand bg-brand-light p-5">
+          <p className="font-bold">
+            사진 {waiting.length}장 — 배경을 어떻게 지울까요?
+          </p>
+          <p className="mt-1 text-sm text-slate-600">
+            재료마다 필요한 것이 정반대라서 여쭤봅니다.
+          </p>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => {
+                const picked = waiting;
+                setWaiting(null);
+                void addFiles(picked, "outside");
+              }}
+              className="rounded-xl border border-slate-300 bg-white p-4 text-left"
+            >
+              <span className="block font-bold text-brand-dark">
+                바깥 배경만 지우기
+              </span>
+              <span className="mt-1 block text-sm leading-relaxed text-slate-600">
+                천 조각·리본처럼 <b>속이 꽉 찬</b> 재료. 재료 색이 배경과 비슷해도
+                속을 파먹지 않습니다.
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const picked = waiting;
+                setWaiting(null);
+                void addFiles(picked, "holes");
+              }}
+              className="rounded-xl border border-slate-300 bg-white p-4 text-left"
+            >
+              <span className="block font-bold text-brand-dark">
+                가운데 구멍까지 뚫기
+              </span>
+              <span className="mt-1 block text-sm leading-relaxed text-slate-600">
+                단추·고리처럼 <b>가운데가 뚫려 있어야 하는</b> 재료. 배경색과 같으면
+                안쪽까지 지웁니다.
+              </span>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setWaiting(null)}
+            className="mt-3 text-sm text-slate-500 underline"
+          >
+            취소
+          </button>
+        </div>
+      )}
 
       {!ready && (
         <p className="mt-4 rounded-lg bg-amber-50 p-4 text-sm leading-relaxed text-amber-800">
@@ -196,7 +271,8 @@ export function MaterialManager({ initial, ready }: Props) {
 
       <p className="mt-4 text-sm leading-relaxed text-slate-500">
         여기 올린 재료는 <b>모든 학생 화면에 똑같이</b> 나옵니다. 학생은 고르기만
-        할 수 있고, 넣거나 뺄 수 없습니다. 사진을 올리면 배경은 자동으로 지워집니다.
+        할 수 있고, 넣거나 뺄 수 없습니다. 사진을 고르면 배경을 어떻게 지울지
+        한 번 여쭤봅니다.
       </p>
 
       {message && (

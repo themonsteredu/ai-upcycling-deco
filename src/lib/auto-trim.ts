@@ -10,10 +10,21 @@ import { contentBox, featherAlpha, shrinkAlpha } from "./trim";
  * 손으로 더 다듬고 싶으면 선생님 화면의 「재료 다듬기」를 쓰면 된다.
  */
 
-/** 이만큼 가까우면 완전히 지운다 */
-const CLEAR_BELOW = 44;
-/** 이만큼 멀면 그대로 둔다. 사이는 반투명으로 부드럽게 잇는다 */
-const KEEP_ABOVE = 96;
+/**
+ * 어디까지 지울지.
+ *
+ * - `outside` 부자재 기본값. 바깥 배경만 조심스럽게 지운다.
+ *   천 조각처럼 재료 색이 배경과 비슷하면 속까지 파먹히므로 기준을 좁게 잡는다.
+ * - `holes` 단추·고리처럼 가운데가 뚫려 있어야 하는 것. 배경색이면 어디든 지운다.
+ */
+export type TrimMode = "outside" | "holes";
+
+/** 모드별 기준. 앞은 "이만큼 가까우면 지운다", 뒤는 "이만큼 멀면 남긴다" */
+const LIMITS: Record<TrimMode, { clearBelow: number; keepAbove: number }> = {
+  outside: { clearBelow: 30, keepAbove: 64 },
+  holes: { clearBelow: 44, keepAbove: 96 },
+};
+
 /** 다듬은 결과의 최대 크기 */
 const MAX_PX = 384;
 /** 잘라낸 뒤 사방에 남길 여백 */
@@ -51,6 +62,8 @@ function floodRemove(
   width: number,
   height: number,
   key: { r: number; g: number; b: number },
+  clearBelow: number,
+  keepAbove: number,
 ) {
   const size = width * height;
   const alpha = new Uint8ClampedArray(size);
@@ -70,12 +83,12 @@ function floodRemove(
       data[offset + 1] - key.g,
       data[offset + 2] - key.b,
     );
-    if (distance >= KEEP_ABOVE) return; // 여기서부터는 물건이다
+    if (distance >= keepAbove) return; // 여기서부터는 물건이다
     alpha[index] = Math.min(
       alpha[index],
-      distance <= CLEAR_BELOW
+      distance <= clearBelow
         ? 0
-        : ((distance - CLEAR_BELOW) / (KEEP_ABOVE - CLEAR_BELOW)) * 255,
+        : ((distance - clearBelow) / (keepAbove - clearBelow)) * 255,
     );
     stack.push(x, y);
   };
@@ -100,22 +113,12 @@ function floodRemove(
   return alpha;
 }
 
-/**
- * 사진 한 장을 자동으로 다듬는다.
- *
- * @param punchHoles 안쪽에 갇힌 배경까지 뚫을지 여부.
- *   고리처럼 가운데가 뚫려 있어야 하는 물건에 켠다.
- */
+/** 사진 한 장을 자동으로 다듬는다 */
 export function autoTrimImage(
   image: HTMLImageElement,
-  punchHoles = false,
+  mode: TrimMode = "outside",
 ): AutoTrimResult | null {
-  return autoTrimSource(
-    image,
-    image.naturalWidth,
-    image.naturalHeight,
-    punchHoles,
-  );
+  return autoTrimSource(image, image.naturalWidth, image.naturalHeight, mode);
 }
 
 /** 사진뿐 아니라 잘라낸 조각(캔버스)도 다듬을 수 있게 한 것 */
@@ -123,8 +126,9 @@ export function autoTrimSource(
   input: CanvasImageSource,
   sourceWidth: number,
   sourceHeight: number,
-  punchHoles = false,
+  mode: TrimMode = "outside",
 ): AutoTrimResult | null {
+  const { clearBelow, keepAbove } = LIMITS[mode];
   const scale = Math.min(1, MAX_PX / Math.max(sourceWidth, sourceHeight));
   const width = Math.max(1, Math.round(sourceWidth * scale));
   const height = Math.max(1, Math.round(sourceHeight * scale));
@@ -146,8 +150,10 @@ export function autoTrimSource(
       width,
       height,
       corner,
+      clearBelow,
+      keepAbove,
     );
-    if (punchHoles) {
+    if (mode === "holes") {
       // 하트 고리 안쪽처럼 사방이 막힌 배경도 지운다
       for (let i = 0; i < width * height; i++) {
         const offset = i * 4;
@@ -156,11 +162,11 @@ export function autoTrimSource(
           source.data[offset + 1] - corner.g,
           source.data[offset + 2] - corner.b,
         );
-        if (distance <= CLEAR_BELOW) alpha[i] = 0;
-        else if (distance < KEEP_ABOVE) {
+        if (distance <= clearBelow) alpha[i] = 0;
+        else if (distance < keepAbove) {
           alpha[i] = Math.min(
             alpha[i],
-            ((distance - CLEAR_BELOW) / (KEEP_ABOVE - CLEAR_BELOW)) * 255,
+            ((distance - clearBelow) / (keepAbove - clearBelow)) * 255,
           );
         }
       }

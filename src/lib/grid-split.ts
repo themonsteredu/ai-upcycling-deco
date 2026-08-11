@@ -1,4 +1,8 @@
-import { autoTrimSource, type AutoTrimResult } from "./auto-trim";
+import {
+  autoTrimSource,
+  type AutoTrimResult,
+  type TrimMode,
+} from "./auto-trim";
 
 /**
  * 여러 개가 가지런히 찍힌 사진 한 장을 칸 수대로 나눠 하나씩 다듬는다.
@@ -28,7 +32,7 @@ export function splitAndTrim(
   image: HTMLImageElement,
   columns: number,
   rows: number,
-  punchHoles = false,
+  mode: TrimMode = "outside",
 ): GridPiece[] {
   const pieces: GridPiece[] = [];
   const cellWidth = image.naturalWidth / columns;
@@ -53,7 +57,7 @@ export function splitAndTrim(
       context.drawImage(image, sx, sy, sw, sh, 0, 0, cell.width, cell.height);
 
       const index = row * columns + column;
-      const trimmed = autoTrimSource(cell, cell.width, cell.height, punchHoles);
+      const trimmed = autoTrimSource(cell, cell.width, cell.height, mode);
 
       // 남은 넓이가 너무 작으면 재료까지 지워진 것이다
       if (trimmed && trimmed.survivedRatio >= TOO_MUCH_REMOVED) {

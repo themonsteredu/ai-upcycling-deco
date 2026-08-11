@@ -11,7 +11,7 @@ import {
 import * as THREE from "three";
 import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
-import { autoTrimImage } from "@/lib/auto-trim";
+import { autoTrimImage, type TrimMode } from "@/lib/auto-trim";
 import { getSupabase, type MaterialRow } from "@/lib/supabase";
 import type { PillowShape } from "@/lib/pillow-geometry";
 import { HOOK_HEIGHT } from "./Hook";
@@ -112,12 +112,12 @@ function readDraft(availableBases: BaseType[]): WorkshopDraft | null {
  * 저장소 폴더에서 온 사진도 넣을 때와 똑같이 배경을 지우고 잘라 준다.
  * 선생님이 폴더에 그냥 넣어도 손질 없이 바로 쓸 수 있어야 한다.
  */
-function trimFolderMaterial(material: Material, punchHoles: boolean) {
+function trimFolderMaterial(material: Material, mode: TrimMode) {
   return new Promise<Material>((resolve) => {
     const image = new Image();
     image.crossOrigin = "anonymous";
     image.onload = () => {
-      const result = autoTrimImage(image, punchHoles);
+      const result = autoTrimImage(image, mode);
       resolve(
         result
           ? { ...material, imageUrl: result.dataUrl, aspect: result.aspect }
@@ -210,7 +210,7 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
 
   useEffect(() => {
     let alive = true;
-    Promise.all(materials.map((m) => trimFolderMaterial(m, false))).then(
+    Promise.all(materials.map((m) => trimFolderMaterial(m, "outside"))).then(
       (list) => {
         if (alive) setFolderMaterials(list);
       },
@@ -223,7 +223,7 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
   useEffect(() => {
     let alive = true;
     // 고리는 가운데 구멍까지 뚫는다
-    Promise.all(hooks.map((h) => trimFolderMaterial(h, true))).then((list) => {
+    Promise.all(hooks.map((h) => trimFolderMaterial(h, "holes"))).then((list) => {
       if (alive) setFolderHooks(list);
     });
     return () => {
