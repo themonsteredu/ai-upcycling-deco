@@ -64,6 +64,17 @@ export function KeyringBase({
 
   if (!shape) return null;
 
+  /*
+   * 끈 끝에서 조금 안쪽으로 들어온 자리의 천 두께.
+   * 끝점 자체는 실루엣 가장자리라 두께가 0이라서 쓸 수 없다.
+   */
+  const strapDepth = shape.strapTip
+    ? shape.sampleHeight(
+        shape.strapTip.x - shape.strapTip.outward * 0.22,
+        shape.strapTip.y,
+      )
+    : 0;
+
   return (
     <group>
       <mesh
@@ -116,6 +127,7 @@ export function KeyringBase({
           scale={hookScale}
           angle={hookAngle}
           flip={hookFlip}
+          strapDepth={strapDepth}
         />
       )}
     </group>

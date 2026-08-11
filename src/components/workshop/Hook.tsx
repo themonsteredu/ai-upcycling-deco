@@ -12,8 +12,13 @@ export const HOOK_HEIGHT = 1.5;
 const HOOK_DEPTH = 0.17;
 /** 두께가 금방 최대에 이르도록 (납작한 판 모양이 된다) */
 const HOOK_PLATEAU = 0.28;
-/** 끈 끝에 살짝 겹쳐 걸리게 하는 길이 */
-const OVERLAP = 0.16;
+/**
+ * 끈 끝에 얼마나 깊이 물리게 할지.
+ *
+ * 살짝만 닿게 두면 천 위에 얹어 놓은 것처럼 보인다. 실제 카라비너는
+ * 천 고리 안으로 들어가므로, 겹치는 부분이 천에 가려질 만큼 깊이 넣는다.
+ */
+const OVERLAP = 0.42;
 
 type Props = {
   material: Material;
@@ -24,6 +29,8 @@ type Props = {
   angle: number;
   /** 좌우를 뒤집을지. 카라비너처럼 좌우가 있는 물건에 쓴다 */
   flip: boolean;
+  /** 끈 끝 부분 천의 두께(반). 고리를 천 뒤로 넣는 깊이를 정하는 데 쓴다 */
+  strapDepth: number;
 };
 
 /**
@@ -32,7 +39,14 @@ type Props = {
  * 사진을 평평한 판으로 붙이면 옆에서 볼 때 사라지므로,
  * 키링 본체와 같은 방법으로 사진 실루엣에 두께를 넣어 3D로 만든다.
  */
-export function Hook({ material, strapTip, scale, angle, flip }: Props) {
+export function Hook({
+  material,
+  strapTip,
+  scale,
+  angle,
+  flip,
+  strapDepth,
+}: Props) {
   const texture = usePreparedTexture(material.imageUrl);
   const mirrored = usePreparedTexture(material.imageUrl, true);
   const [shape, setShape] = useState<PillowShape | null>(null);
@@ -73,6 +87,19 @@ export function Hook({ material, strapTip, scale, angle, flip }: Props) {
   const x = strapTip.x + strapTip.outward * (reach - OVERLAP);
 
   /*
+   * 고리는 천 두께 「안」에 들어가야 한다.
+   *
+   * 끈 끝에 살짝만 대면 천이 얇은 곳이라 고리가 천 위로 삐져나와,
+   * 풀로 붙여 놓은 것처럼 보인다. 천이 두꺼운 안쪽까지 깊이 물리면
+   * 겹치는 쪽이 천에 가려져서 천 고리 안으로 들어간 모습이 된다.
+   *
+   * 천보다 두꺼운 고리를 골랐을 때만 뒤로 조금 물린다. 그래야 앞에서도
+   * 뒤에서도 자연스럽다.
+   */
+  const half = (HOOK_DEPTH * scale) / 2;
+  const z = half <= strapDepth ? 0 : -(half - strapDepth) - 0.02;
+
+  /*
    * 뒤집기는 크기를 -1로 만드는 대신 세로축으로 반 바퀴 돌린다.
    * 실제로 물건을 뒤집어 놓는 것과 같아서 면이 뒤집히거나 그림자가
    * 이상해지지 않는다. 돌린 각도는 부호를 뒤집어야 화면에서 같은 방향으로 돈다.
@@ -87,7 +114,7 @@ export function Hook({ material, strapTip, scale, angle, flip }: Props) {
   return (
     <mesh
       geometry={shape.geometry}
-      position={[x, strapTip.y, 0]}
+      position={[x, strapTip.y, z]}
       rotation={[0, flip ? Math.PI : 0, flip ? -radians : radians]}
       raycast={() => null}
     >
