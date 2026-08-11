@@ -94,13 +94,16 @@ export function JeansSetup({ initial, ready }: Props) {
     setMessage("사진을 올렸습니다. 이제 조각 자리를 찍어 주세요.");
   }, []);
 
-  /** 뒷면은 새 청바지를 만들지 않고 지금 것에 붙인다 */
-  const uploadBack = useCallback(
-    async (files: FileList | null) => {
+  /**
+   * 한쪽 사진만 갈아 끼운다.
+   * 사진이 바뀌면 그 면에 찍어 둔 자리는 좌표가 안 맞으므로 함께 지운다.
+   */
+  const replace = useCallback(
+    async (which: JeansSide, files: FileList | null) => {
       const file = files?.[0];
       if (!file || !jeans) return;
       setBusy(true);
-      setMessage("뒷면을 올리는 중…");
+      setMessage(which === "front" ? "앞면을 올리는 중…" : "뒷면을 올리는 중…");
       const dataUrl = await shrink(file);
       if (!dataUrl) {
         setBusy(false);
@@ -108,17 +111,28 @@ export function JeansSetup({ initial, ready }: Props) {
         return;
       }
       const response = await fetch("/api/teacher/jeans", {
-        method: "POST",
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ front: jeans.frontUrl, back: dataUrl }),
+        body: JSON.stringify({ id: jeans.id, [which]: dataUrl }),
       });
+      const json = await response.json();
       setBusy(false);
       if (!response.ok) {
-        setMessage("뒷면을 올리지 못했습니다");
+        setMessage(json.error ?? "사진을 올리지 못했습니다");
         return;
       }
-      setMessage("뒷면까지 올렸습니다");
-      window.location.reload();
+      setJeans({
+        ...jeans,
+        frontUrl: json.frontUrl ?? jeans.frontUrl,
+        backUrl: which === "back" ? (json.backUrl ?? jeans.backUrl) : jeans.backUrl,
+      });
+      setZones((prev) => prev.filter((zone) => zone.side !== which));
+      setSide(which);
+      setMessage(
+        which === "front"
+          ? "앞면을 바꿨습니다. 앞면 자리를 다시 찍어 주세요."
+          : "뒷면을 올렸습니다. 뒷면 자리를 찍어 주세요.",
+      );
     },
     [jeans],
   );
@@ -196,6 +210,35 @@ export function JeansSetup({ initial, ready }: Props) {
         </p>
       )}
 
+      {/*
+        파일 고르는 칸은 화면이 어떻게 바뀌든 늘 있어야 한다.
+        「사진이 없을 때」 화면 안에만 두었더니, 사진을 올린 뒤에는
+        「다른 청바지로 바꾸기」를 눌러도 열 것이 없었다.
+      */}
+      <input
+        ref={frontRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(event) => {
+          const files = event.target.files;
+          event.target.value = "";
+          if (jeans) void replace("front", files);
+          else void upload(files);
+        }}
+      />
+      <input
+        ref={backRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(event) => {
+          const files = event.target.files;
+          event.target.value = "";
+          void replace("back", files);
+        }}
+      />
+
       {!jeans ? (
         <div className="mt-6 rounded-xl border-2 border-dashed border-slate-300 p-10 text-center">
           <p className="font-bold">청바지를 펼쳐 놓고 앞면을 찍어 주세요</p>
@@ -210,16 +253,6 @@ export function JeansSetup({ initial, ready }: Props) {
           >
             {busy ? "올리는 중…" : "앞면 사진 올리기"}
           </button>
-          <input
-            ref={frontRef}
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={(event) => {
-              void upload(event.target.files);
-              event.target.value = "";
-            }}
-          />
         </div>
       ) : (
         <div className="mt-6 grid gap-5 sm:grid-cols-[minmax(0,1fr)_260px]">
@@ -241,10 +274,19 @@ export function JeansSetup({ initial, ready }: Props) {
               ))}
               <button
                 type="button"
-                onClick={() => frontRef.current?.click()}
-                className="ml-auto text-sm text-slate-400 underline"
+                disabled={busy}
+                onClick={() =>
+                  (side === "front" ? frontRef : backRef).current?.click()
+                }
+                className="ml-auto text-sm text-slate-400 underline disabled:opacity-40"
               >
-                다른 청바지로 바꾸기
+                {busy
+                  ? "올리는 중…"
+                  : side === "front"
+                    ? "앞면 사진 바꾸기"
+                    : jeans.backUrl
+                      ? "뒷면 사진 바꾸기"
+                      : "뒷면 사진 올리기"}
               </button>
             </div>
 
@@ -284,9 +326,10 @@ export function JeansSetup({ initial, ready }: Props) {
               </div>
             ) : (
               <div className="mt-3 rounded-xl border-2 border-dashed border-slate-300 p-10 text-center">
-                <p className="text-sm text-slate-500">
-                  뒷면 사진은 아직 없습니다. 뒷주머니를 뒷면에서 찍고 싶을 때만
-                  올리면 됩니다.
+                <p className="text-sm leading-relaxed text-slate-500">
+                  뒷면 사진은 아직 없습니다.
+                  <br />
+                  뒷주머니나 브랜드 라벨을 뒷면에서 찍고 싶을 때만 올리면 됩니다.
                 </p>
                 <button
                   type="button"
@@ -294,20 +337,10 @@ export function JeansSetup({ initial, ready }: Props) {
                   onClick={() => backRef.current?.click()}
                   className="mt-4 rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-40"
                 >
-                  뒷면 사진 올리기
+                  {busy ? "올리는 중…" : "뒷면 사진 올리기"}
                 </button>
               </div>
             )}
-            <input
-              ref={backRef}
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={(event) => {
-                void uploadBack(event.target.files);
-                event.target.value = "";
-              }}
-            />
           </div>
 
           <div>
