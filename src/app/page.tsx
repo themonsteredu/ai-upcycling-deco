@@ -18,22 +18,15 @@ export default function Home() {
       </p>
 
       <Link
-        href="/teardown"
+        href="/workshop"
         className="mt-10 block rounded-2xl bg-brand px-6 py-6 text-center text-xl font-bold text-white shadow-sm"
       >
-        시작하기
+        3D 공방 시작하기
       </Link>
 
       <p className="mt-4 text-center text-sm font-light text-slate-500">
-        버려질 청바지를 해체하는 것부터 시작합니다
+        재료를 고르고 키링 위를 눌러 붙여 보세요
       </p>
-
-      <Link
-        href="/workshop"
-        className="mt-6 block rounded-xl border border-slate-300 px-6 py-3 text-center text-sm font-bold text-slate-500"
-      >
-        3D 공방 바로 열기
-      </Link>
 
       <div className="mt-auto flex justify-center pt-14">
         <Link
