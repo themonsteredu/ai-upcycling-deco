@@ -12,6 +12,8 @@ import * as THREE from "three";
 import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import { getSupabase, type MaterialRow } from "@/lib/supabase";
+import { partById } from "@/lib/denim-parts";
+import { readTeardown } from "@/lib/teardown-storage";
 import type { PillowShape } from "@/lib/pillow-geometry";
 import { HOOK_HEIGHT } from "./Hook";
 import { KeyringBase } from "./KeyringBase";
@@ -132,6 +134,8 @@ function readDraft(availableBases: BaseType[]): WorkshopDraft | null {
 
 export function Workshop({ availableBases }: Props) {
   const [cache] = useState(readMaterialCache);
+  // 해체소에서 고른 조각. 「밑단으로 만드는 중」 으로 계속 보여 준다
+  const [myPart] = useState(() => partById(readTeardown().chosen ?? ""));
   const [initialDraft] = useState(() => readDraft(availableBases));
   const [baseType, setBaseType] = useState<BaseType>(
     initialDraft?.baseType ?? availableBases[0] ?? "denim",
@@ -865,6 +869,12 @@ export function Workshop({ availableBases }: Props) {
 
       {/* 가운데 — 3D 무대 */}
       <div className="relative order-1 min-h-[40dvh] flex-1 lg:order-2 lg:min-h-0">
+        {myPart && (
+          <div className="pointer-events-none absolute top-3 left-3 z-10 rounded-full bg-brand/20 px-3 py-1.5 text-[11px] font-bold text-brand">
+            {myPart.name}으로 만드는 중
+          </div>
+        )}
+
         <div className="pointer-events-none absolute top-3 left-1/2 z-10 hidden -translate-x-1/2 rounded-full border border-[#23404F] bg-[#12222E]/90 px-4 py-2 text-xs whitespace-nowrap sm:block">
           <span className={stepClass(1)}>① 재료 고르기</span>
           <span className="mx-2 text-[#33566a]">→</span>

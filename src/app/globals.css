@@ -38,6 +38,34 @@
   font-display: swap;
 }
 
+/* 청바지 해체소 — 아직 안 뜯은 조각이 숨 쉬듯 깜빡인다 */
+@keyframes jeans-breathe {
+  0%,
+  100% {
+    stroke-opacity: 0.55;
+  }
+  50% {
+    stroke-opacity: 1;
+  }
+}
+
+.jeans-part {
+  animation: jeans-breathe 2.4s ease-in-out infinite;
+}
+
+/* 「모르겠어요」를 눌렀을 때 알려주는 조각 */
+.jeans-part-hint {
+  animation: jeans-breathe 0.7s ease-in-out infinite;
+  stroke-width: 4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jeans-part,
+  .jeans-part-hint {
+    animation: none;
+  }
+}
+
 :root {
   --background: #f7f8f8;
   --foreground: #16211f;
