@@ -99,11 +99,13 @@ export const DENIM_PARTS: DenimPart[] = [
   },
 ];
 
-/** 청바지 한 벌에서 나오는 키링 개수 */
-export const KEYRINGS_PER_JEANS = DENIM_PARTS.reduce(
-  (sum, part) => sum + part.keyrings,
-  0,
-);
+/** 고른 조각들에서 나오는 키링 개수 */
+export function keyringsFrom(parts: DenimPart[]) {
+  return parts.reduce((sum, part) => sum + part.keyrings, 0);
+}
+
+/** 청바지 한 벌을 다 뜯었을 때 나오는 키링 개수 */
+export const KEYRINGS_PER_JEANS = keyringsFrom(DENIM_PARTS);
 
 /** 헌옷수거함에 넣었을 때 받는 값 (원) */
 export const THROWN_AWAY_PRICE = 300;

@@ -8,6 +8,11 @@ export const metadata = {
 
 const SCREENS = [
   {
+    href: "/teacher/jeans",
+    name: "청바지 사진 준비",
+    note: "수업에 가져갈 진짜 청바지를 찍어 올리고, 조각마다 누를 자리를 찍어 둡니다. 안 올리면 앱이 그린 청바지 그림이 대신 나옵니다.",
+  },
+  {
     href: "/teacher/materials",
     name: "재료함 관리",
     note: "부자재와 고리를 올리고, 보임·숨김과 순서를 정합니다. 여기 올린 것이 모든 학생 화면에 그대로 나옵니다.",

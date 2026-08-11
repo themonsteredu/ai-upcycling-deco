@@ -3,11 +3,13 @@
 import { useCallback, useRef, useState } from "react";
 import {
   DENIM_PARTS,
-  KEYRINGS_PER_JEANS,
   KEYRING_PRICE,
   THROWN_AWAY_PRICE,
+  keyringsFrom,
   partById,
 } from "@/lib/denim-parts";
+import type { JeansPhoto } from "@/lib/jeans-photo";
+import { JeansPhotoStage } from "./JeansPhotoStage";
 import { JeansSvg } from "./JeansSvg";
 
 type Props = {
@@ -17,6 +19,8 @@ type Props = {
   onChange: (next: { taken: string[]; chosen: string | null }) => void;
   /** 다 하고 다음으로. 없으면 버튼이 안 나온다 */
   onDone?: () => void;
+  /** 선생님이 올린 실제 청바지 사진. 없으면 앱이 그린 그림을 쓴다 */
+  photo?: JeansPhoto | null;
 };
 
 const won = (value: number) => value.toLocaleString("ko-KR");
@@ -27,13 +31,23 @@ const won = (value: number) => value.toLocaleString("ko-KR");
  * 청바지를 톡톡 눌러 조각을 뜯어내고, 마지막에 「내 키링은 어느 조각으로
  * 만들까」를 하나 고른다. 고른 조각은 3D 공방과 갤러리까지 따라간다.
  */
-export function Teardown({ taken, chosen, onChange, onDone }: Props) {
+export function Teardown({ taken, chosen, onChange, onDone, photo }: Props) {
   const [justTook, setJustTook] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const allTaken = taken.length === DENIM_PARTS.length;
+  /*
+   * 사진을 쓸 때는 선생님이 자리를 찍어 둔 조각만 찾을 수 있다.
+   * 자리가 없는 조각까지 세면 학생이 영영 못 끝낸다.
+   */
+  const parts = photo
+    ? DENIM_PARTS.filter((part) =>
+        photo.zones.some((zone) => zone.partId === part.id),
+      )
+    : DENIM_PARTS;
+  const allTaken = parts.length > 0 && parts.every((part) => taken.includes(part.id));
   const card = partById(justTook ?? "");
+  const keyrings = keyringsFrom(parts);
 
   const pick = useCallback(
     (id: string) => {
@@ -46,12 +60,12 @@ export function Teardown({ taken, chosen, onChange, onDone }: Props) {
   );
 
   const showHint = useCallback(() => {
-    const next = DENIM_PARTS.find((part) => !taken.includes(part.id));
+    const next = parts.find((part) => !taken.includes(part.id));
     if (!next) return;
     setHint(next.id);
     if (hintTimer.current) clearTimeout(hintTimer.current);
     hintTimer.current = setTimeout(() => setHint(null), 2600);
-  }, [taken]);
+  }, [taken, parts]);
 
   return (
     <main className="mx-auto w-full max-w-5xl px-5 py-6">
@@ -64,12 +78,22 @@ export function Teardown({ taken, chosen, onChange, onDone }: Props) {
 
       <div className="mt-5 grid gap-5 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)]">
         <div className="rounded-2xl bg-[#EEF2F6] p-4">
-          <div className="mx-auto h-[44dvh] max-h-[440px] sm:h-[54dvh]">
-            <JeansSvg taken={taken} hint={hint} onPick={pick} />
-          </div>
+          {photo ? (
+            <JeansPhotoStage
+              photo={photo}
+              taken={taken}
+              hint={hint}
+              onPick={pick}
+            />
+          ) : (
+            <div className="mx-auto h-[44dvh] max-h-[440px] sm:h-[54dvh]">
+              <JeansSvg taken={taken} hint={hint} onPick={pick} />
+            </div>
+          )}
           <div className="mt-2 flex items-center justify-center gap-3">
             <span className="text-xs text-slate-500">
-              {taken.length} / {DENIM_PARTS.length} 조각
+              {parts.filter((part) => taken.includes(part.id)).length} /{" "}
+              {parts.length} 조각
             </span>
             {!allTaken && (
               <button
@@ -112,7 +136,7 @@ export function Teardown({ taken, chosen, onChange, onDone }: Props) {
 
           <p className="mt-5 text-xs tracking-wider text-slate-400">조각 바구니</p>
           <div className="mt-2 grid grid-cols-2 gap-2">
-            {DENIM_PARTS.map((part) => {
+            {parts.map((part) => {
               const found = taken.includes(part.id);
               return (
                 <div
@@ -135,14 +159,12 @@ export function Teardown({ taken, chosen, onChange, onDone }: Props) {
         <section className="mt-6 rounded-2xl bg-[#0B1620] p-6 text-center text-white">
           <p className="text-sm text-slate-300">청바지 한 벌을 다 뜯었습니다</p>
           <p className="mt-2 text-4xl font-bold text-brand">
-            키링 {KEYRINGS_PER_JEANS}개
+            키링 {keyrings}개
           </p>
           <p className="mt-4 leading-relaxed text-slate-300">
             헌옷수거함에 넣으면 <b>{won(THROWN_AWAY_PRICE)}원</b>, 키링으로
             만들면{" "}
-            <b className="text-white">
-              {won(KEYRINGS_PER_JEANS * KEYRING_PRICE)}원
-            </b>
+            <b className="text-white">{won(keyrings * KEYRING_PRICE)}원</b>
           </p>
         </section>
       )}
@@ -156,7 +178,7 @@ export function Teardown({ taken, chosen, onChange, onDone }: Props) {
             고른 조각은 내 작품 이야기로 끝까지 따라갑니다.
           </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {DENIM_PARTS.map((part) => {
+            {parts.map((part) => {
               const on = chosen === part.id;
               return (
                 <button
