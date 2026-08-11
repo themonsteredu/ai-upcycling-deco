@@ -18,6 +18,8 @@ type Props = {
   hookMaterial: Material | null;
   hookScale: number;
   hookAngle: number;
+  /** 고리를 좌우로 뒤집을지 */
+  hookFlip: boolean;
 };
 
 export function KeyringBase({
@@ -28,6 +30,7 @@ export function KeyringBase({
   hookMaterial,
   hookScale,
   hookAngle,
+  hookFlip,
 }: Props) {
   const frontUrl = `/base/${baseType}-front.png`;
   const front = usePreparedTexture(frontUrl);
@@ -112,6 +115,7 @@ export function KeyringBase({
           strapTip={shape.strapTip}
           scale={hookScale}
           angle={hookAngle}
+          flip={hookFlip}
         />
       )}
     </group>

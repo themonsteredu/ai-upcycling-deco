@@ -53,6 +53,8 @@ export type WorkshopDraft = {
   hookId: string | null;
   /** 고리를 돌린 각도 (도) */
   hookAngle: number;
+  /** 고리를 좌우로 뒤집었는지. 없으면 안 뒤집은 것으로 본다 */
+  hookFlip?: boolean;
 };
 
 /** 고리 크기 조절 범위 */

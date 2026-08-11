@@ -102,6 +102,7 @@ function readDraft(availableBases: BaseType[]): WorkshopDraft | null {
       placements: Array.isArray(draft?.placements) ? draft.placements : [],
       hookId: draft?.hookId ?? null,
       hookAngle: draft?.hookAngle ?? 0,
+      hookFlip: draft?.hookFlip ?? false,
     };
   } catch {
     return null;
@@ -142,6 +143,7 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
   );
   const [hookScale, setHookScale] = useState(1);
   const [hookAngle, setHookAngle] = useState(initialDraft?.hookAngle ?? 0);
+  const [hookFlip, setHookFlip] = useState(initialDraft?.hookFlip ?? false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [size, setSizeState] = useState(1);
@@ -266,13 +268,14 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
       placements,
       hookId,
       hookAngle,
+      hookFlip,
     };
     try {
       window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
     } catch {
       // 저장 공간이 부족해도 작업은 계속되어야 한다
     }
-  }, [baseType, placements, hookId, hookAngle]);
+  }, [baseType, placements, hookId, hookAngle, hookFlip]);
 
   /* ---------- 화면에 꽉 차게 맞추기 ---------- */
 
@@ -860,6 +863,21 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
                   onClick={() => setHookAngle((v) => (v + 90) % 360)}
                 />
               </div>
+              {/*
+                카라비너처럼 좌우가 있는 물건은 돌리기만으로는 절대 못 맞춘다.
+                180도 돌리면 위아래까지 같이 뒤집히기 때문이다.
+              */}
+              <button
+                type="button"
+                onClick={() => setHookFlip((v) => !v)}
+                className={`mt-2 w-full rounded-lg border py-2 text-xs ${
+                  hookFlip
+                    ? "border-brand bg-brand/15 text-white"
+                    : "border-[#23404F] bg-[#182D3C] text-slate-200"
+                }`}
+              >
+                좌우 뒤집기{hookFlip ? " — 켬" : ""}
+              </button>
             </div>
           )}
 
@@ -921,6 +939,7 @@ export function Workshop({ materials, hooks, availableBases }: Props) {
                 hookMaterial={hookMaterial}
                 hookScale={hookScale}
                 hookAngle={hookAngle}
+                hookFlip={hookFlip}
               />
               {placements.map((placement) => {
                 const material = materialById.get(placement.materialId);

@@ -22,6 +22,8 @@ type Props = {
   scale: number;
   /** 고리를 돌린 각도 (도) */
   angle: number;
+  /** 좌우를 뒤집을지. 카라비너처럼 좌우가 있는 물건에 쓴다 */
+  flip: boolean;
 };
 
 /**
@@ -30,7 +32,7 @@ type Props = {
  * 사진을 평평한 판으로 붙이면 옆에서 볼 때 사라지므로,
  * 키링 본체와 같은 방법으로 사진 실루엣에 두께를 넣어 3D로 만든다.
  */
-export function Hook({ material, strapTip, scale, angle }: Props) {
+export function Hook({ material, strapTip, scale, angle, flip }: Props) {
   const texture = usePreparedTexture(material.imageUrl);
   const mirrored = usePreparedTexture(material.imageUrl, true);
   const [shape, setShape] = useState<PillowShape | null>(null);
@@ -70,16 +72,28 @@ export function Hook({ material, strapTip, scale, angle }: Props) {
     Math.abs(halfHeight * Math.sin(radians));
   const x = strapTip.x + strapTip.outward * (reach - OVERLAP);
 
+  /*
+   * 뒤집기는 크기를 -1로 만드는 대신 세로축으로 반 바퀴 돌린다.
+   * 실제로 물건을 뒤집어 놓는 것과 같아서 면이 뒤집히거나 그림자가
+   * 이상해지지 않는다. 돌린 각도는 부호를 뒤집어야 화면에서 같은 방향으로 돈다.
+   *
+   * 다만 뒷장에는 원래 「뒤에서 봐도 똑바로 보이도록」 좌우 반전 사진이
+   * 들어 있다. 그대로 돌리면 두 번 뒤집혀 상쇄되므로, 뒤집을 때는
+   * 앞뒤 사진을 맞바꾼다.
+   */
+  const faceMap = flip ? mirrored : texture;
+  const backMap = flip ? texture : mirrored;
+
   return (
     <mesh
       geometry={shape.geometry}
       position={[x, strapTip.y, 0]}
-      rotation={[0, 0, radians]}
+      rotation={[0, flip ? Math.PI : 0, flip ? -radians : radians]}
       raycast={() => null}
     >
       <meshStandardMaterial
         attach="material-0"
-        map={texture}
+        map={faceMap}
         roughness={0.45}
         metalness={0.15}
         alphaTest={0.05}
@@ -87,7 +101,7 @@ export function Hook({ material, strapTip, scale, angle }: Props) {
       />
       <meshStandardMaterial
         attach="material-1"
-        map={mirrored}
+        map={backMap}
         roughness={0.45}
         metalness={0.15}
         alphaTest={0.05}
