@@ -8,9 +8,9 @@ export const metadata = {
 
 const SCREENS = [
   {
-    href: "/teacher/jeans",
-    name: "청바지 사진 준비",
-    note: "학생들이 화면에서 해체할 청바지 사진입니다. 안 입는 청바지를 한 번 찍어 올리고 조각마다 누를 자리를 찍어 두면 됩니다. 수업에 가져갈 필요는 없습니다. 안 올리면 앱이 그린 그림이 대신 나옵니다.",
+    href: "/teacher/intro",
+    name: "수업 자료",
+    note: "프로젝터에 띄우는 도입 자료입니다. 파워포인트 슬라이드를 사진으로 올리고, 「이건 업사이클링 될까 말까」 퀴즈로 마무리합니다.",
   },
   {
     href: "/teacher/materials",
