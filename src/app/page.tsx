@@ -79,7 +79,7 @@ export default function Home() {
           </div>
 
           <p className="mt-9 text-lg leading-relaxed font-light text-slate-300 tall:mt-12 tall:text-xl">
-            화면에서 키링을 3D로 설계하고, 그 설계도를 보면서 실제 바느질로
+            화면에서 키링을 3D로 설계하고, 그 설계도를 보면서 실제 재료로
             완성합니다.
           </p>
 
@@ -103,7 +103,7 @@ export default function Home() {
           {[
             ["01", "재료 고르기"],
             ["02", "붙여 꾸미기"],
-            ["03", "실제 바느질"],
+            ["03", "실물로 만들기"],
           ].map(([number, label]) => (
             <li key={number} className="px-2 text-center">
               <span
