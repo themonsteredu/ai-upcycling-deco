@@ -78,11 +78,6 @@ export default function Home() {
             />
           </div>
 
-          <p className="mt-9 text-lg leading-relaxed font-light text-slate-300 tall:mt-12 tall:text-xl">
-            화면에서 키링을 3D로 설계하고, 그 설계도를 보면서 실제 재료로
-            완성합니다.
-          </p>
-
           {/* ── 시작 ── */}
           <Link
             href="/workshop"
